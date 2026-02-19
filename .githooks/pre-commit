@@ -1,0 +1,50 @@
+#!/bin/sh
+# Pre-commit hook: regenerate requirements.txt from pyproject.toml using uv
+
+if ! command -v uv > /dev/null 2>&1; then
+    echo "Warning: uv not found, skipping requirements.txt generation."
+    exit 0
+fi
+
+echo "Regenerating requirements.txt..."
+uv export --no-hashes --no-emit-project -o requirements.txt
+
+if [ $? -ne 0 ]; then
+    echo "Error: uv export failed. Aborting commit."
+    exit 1
+fi
+
+git add requirements.txt
+echo "requirements.txt updated and staged."
+
+# Convert staged .qmd files to .ipynb using quarto
+if ! command -v quarto > /dev/null 2>&1; then
+    echo "Warning: quarto not found, skipping .qmd to .ipynb conversion."
+    exit 0
+fi
+
+STAGED_QMD=$(git diff --cached --name-only --diff-filter=ACM | grep '\.qmd$')
+
+if [ -z "$STAGED_QMD" ]; then
+    exit 0
+fi
+
+echo "Converting .qmd files to .ipynb..."
+FAILED=0
+
+for qmd in $STAGED_QMD; do
+    echo "  Converting $qmd..."
+    quarto convert "$qmd" --output "${qmd%.qmd}.ipynb"
+    if [ $? -ne 0 ]; then
+        echo "  Error: failed to convert $qmd"
+        FAILED=1
+    else
+        git add "${qmd%.qmd}.ipynb"
+        echo "  Staged ${qmd%.qmd}.ipynb"
+    fi
+done
+
+if [ $FAILED -ne 0 ]; then
+    echo "Error: one or more .qmd conversions failed. Aborting commit."
+    exit 1
+fi

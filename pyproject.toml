@@ -1,0 +1,22 @@
+[project]
+name = "ndmi110-graphs-and-networks"
+version = "0.1.0"
+description = "Graphs and Networks MMF UK Course"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "contextily>=1.7.0",
+    "jupyterlab>=4.5.4",
+    "matplotlib>=3.10.8",
+    "networkx>=3.6.1",
+    "numpy>=2.4.2",
+    "osmnx>=2.1.0",
+    "pandas>=3.0.0",
+    "scipy>=1.17.0",
+    "seaborn>=0.13.2",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.1",
+]

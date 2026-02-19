@@ -1,0 +1,21 @@
+---
+title: 'Week 0: Demo Notebook'
+jupyter: python3
+---
+
+# Demo Notebook
+This notebook tests the setup by importing necessary libraries and creating a basic graph.
+
+```{python}
+# Import Required Libraries
+import numpy as np
+import networkx as nx
+```
+
+```{python}
+# Create a simple graph
+G = nx.Graph()
+G.add_edges_from([(1, 2), (2, 3), (3, 4), (4, 1)])
+print("Nodes:", G.nodes())
+print("Edges:", G.edges())
+```
