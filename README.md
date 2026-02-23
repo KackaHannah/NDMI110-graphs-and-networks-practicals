@@ -122,11 +122,3 @@ jupyter lab
 
 This will open JupyterLab in your browser. From there, navigate to the notebook
 file (`.ipynb`) you want to open.
-
-### IDEs and other interfaces
-
-If you prefer to work inside an editor or an alternative interface:
-
-- **[Visual Studio Code](https://code.visualstudio.com/)** -- open any `.ipynb` file directly; requires the [Jupyter extension](https://marketplace.visualstudio.com/items?itemName=ms-toolsai.jupyter) and lets you select the kernel from within the editor.
-- **[PyCharm Professional](https://www.jetbrains.com/pycharm/)** -- supports Jupyter notebooks natively; see the [JetBrains documentation](https://www.jetbrains.com/help/pycharm/jupyter-notebook-support.html).
-- **Jupyter Notebook (classic)** -- a simpler browser-based alternative to JupyterLab; launch with `jupyter notebook` instead of `jupyter lab`.
