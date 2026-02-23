@@ -1,0 +1,11 @@
+# Markdown flavor and line width
+flavor = "quarto"
+line-width = 80
+line-ending = "auto"
+
+# Formatting style
+[style]
+wrap = "preserve"
+
+[formatters]
+python = ["black"]
