@@ -1,6 +1,26 @@
 # NDMI110 - Graphs and Networks
 
-## Credit
+Tutorials are in turns practical and theoretical. During practical tutorials we
+will work with specific graphs and real-world networks. On theoretical tutorials
+we will deepen our understanding of theoretical knowledge gained from lectures.
+
+## Gaining tutorial credit
+
+Throughout the semester there will be 3 short tests oriented on understanding
+the material from lectures, each exam for 10 points. This makes overall 30
+points which can be obtained from tests.
+
+By being active during practical tutorials you gain 5 points per practical
+tutorial.
+
+The condition for gaining the tutorial credit is having *30 points*.
+
+### Missing
+
+If you are unable to attend the practical tutorial from any reason (or if you
+fail to be active enough), you can send your solution anytime before the next
+tutorial, by which you can gain 5 points. 
+
 
 ## Environment Setup
 

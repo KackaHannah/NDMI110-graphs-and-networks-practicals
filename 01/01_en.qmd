@@ -1,0 +1,865 @@
+---
+title: 'Practicals 01: Working with Graphs and Networks'
+jupyter: python3
+---
+
+> **Key Words:**
+> - social network (Facebook, Twitter, relationships)
+> - IMDb network
+> - coauthorship network, citation network
+> - climate
+> - brain
+> - protein-protein interaction network
+> - internet, WWW
+> - transportation network
+> - SIR model
+> - influencers
+> - Erdos number, Kevin Bacon number
+> - distance, degree of separation, small world phenomenon
+> - clustering
+> - communities
+> - random graphs
+> - scale-free property
+> - network robustness
+>    - random attacks are not that bad
+>    - targeted attacks can be severe (aim for hubs)
+> - degree centrality
+> - eccentricity
+
+> **Objectives:**
+> - understand how to work with graphs and networks using the ``networkx`` package for Python
+> - understand how to visualize graphs and networks
+> - answer basic questions and hypotheses about the structure of a graph and its properties
+
+# Practicals 01: Working with Graphs and Networks
+
+The goal of this notebook is to introduce you to working with networks using computational tools. We will use the Python package ``networkx``, which is a powerful library for the creation, manipulation, and study of complex networks. NetworkX provides a wide range of functions for working with graphs and networks, including algorithms for graph analysis, graph generation, and graph visualization.
+
+In this notebook we use ``networkx`` as the primary graph computing library. However, many more are available: [igraph](http://igraph.org/redirect.html), [osmnx](https://github.com/gboeing/osmnx) or [SNAP](http://snap.stanford.edu/). 
+
+```{python}
+import random
+import networkx as nx
+import numpy as np
+
+from pprint import pprint
+
+import matplotlib.pyplot as plt
+
+# NOTE: The following 2 lines are just to suppress warnings in the notebook. You can ignore them.
+import warnings
+
+warnings.filterwarnings("ignore")
+```
+
+We will be able to only demonstrate some of the functionality, but by no means all. In case you need additional functions, it is likely that they are already implemented in NetworkX. Always check the documentation for more information: https://networkx.org/documentation/stable/ 
+
+# Fundamental Graph Theory
+
+In this section, we introduce basic terminology from graph theory just to establish a common language.
+
+A graph $G = (V, E)$ consists of a set of nodes (vertices) $V$ and a set of edges $E$ describing how nodes interact.
+Nodes can represent for example transit stops (metro stations and tram stops), and edges represent the track segments between consecutive stops along a route.
+Each node or edge can hold different attributes, e.g., nodes carry the stop name and geographic coordinates, while edges carry information about which transit lines use that connection or the average travel time between the two stops.
+
+Edges can be **directed** or **undirected**.
+
+The number of nodes $N = |V|$ is often called the **size** of the network.
+
+Edges with numerical attributes are called **weights**, and a graph with weighted edges is called a **weighted graph**.
+
+An important local property of a node $v$ is its **degree** $k_v$, i.e., the number of incident edges. Degree is often used as a basic notion of node importance.
+
+The **average degree** depends on whether the graph is directed or undirected. For an undirected graph:
+
+$$
+\langle k \rangle = \frac{1}{|V|}\sum_{v\in V} k_v = \frac{2|E|}{|V|}.
+$$
+
+For a directed graph:
+
+$$
+\langle k^{\mathrm{in}} \rangle = \langle k^{\mathrm{out}} \rangle = \frac{|E|}{|V|}.
+$$
+
+The **Cartesian product** of two graphs $G$ and $H$, denoted $G \square H$, has vertex set $V(G) \times V(H)$. Two vertices $(u,v)$ and $(u',v')$ are adjacent in $G \square H$ iff
+
+$$
+\bigl(u=u'\ \land\ (v,v')\in E(H)\bigr)\ \lor\ \bigl(v=v'\ \land\ (u,u')\in E(G)\bigr).
+$$
+
+The **adjacency matrix** of a graph $G$ is a square matrix $A$ where
+
+$$
+A_{ij} =
+\begin{cases}
+1, & \text{if } (i,j)\in E,\\
+0, & \text{otherwise.}
+\end{cases}
+$$
+
+For undirected graphs, $A$ is symmetric, i.e., $A_{ij}=A_{ji}$.
+
+## Graph Objects
+
+The library provides several objects to represent different types of graphs. 
+The options include:
+- ``Graph`` which represents an undirected graph,
+- ``DiGraph`` which represents a directed graph,
+- ``MultiGraph`` which represents an undirected graph with multiple edges between the same pair of nodes,
+- ``MultiDiGraph`` which represents a directed graph with multiple edges between the same pair of nodes.
+
+```{python}
+G_simple = nx.Graph()
+G_directed = nx.DiGraph()
+
+G_multi = nx.MultiGraph()
+G_multidirected = nx.MultiDiGraph()
+```
+
+For now, let's use the simple undirected graph for the next few examples, but feel free to experiment with the other graph types as well.
+
+# Graph Creation and Manipulation
+
+```{python}
+# Create an empty simple graph
+G = nx.Graph()
+
+# We can print basic information about the graph, such as the number of nodes and edges
+print(G)
+```
+
+The ``Graph`` object supports basic operations such as adding a vertex
+```{python}
+# Add a single vertex labeled '1' to the graph
+G.add_node(1)
+
+# Vertices can also be added by using a list of vertices
+
+G.add_nodes_from([2,3])
+G.add_nodes_from(range(4, 10))
+
+print(G)
+```
+
+The vertices can be listed with the ``nodes()`` function
+```{python}
+G.nodes()
+```
+
+The nodes can be arbitrary python objects, such as strings, tuples, etc. For example, we can add a node with the label 'A' to the graph:
+```{python}
+G.add_node('A')
+print(G.nodes())
+```
+
+Of course we can also add edges
+```{python}
+# Edges can be added individually
+G.add_edge(1,2)
+
+# ... or by using a list of edges
+
+G.add_edges_from([(1,3), (2,3), (3,4), (4,5), (5,6), (6,7), (7,8), (8,9), (3,7)])
+
+print(G)
+```
+
+```{python}
+G.edges()
+```
+
+Similarly, we can also remove vertices
+```{python}
+G.remove_node(3)
+print("Nodes: {}, Edges: {}".format(G.nodes(), G.edges()))
+```
+
+and edges
+
+```{python}
+G.remove_edge(4, 5)
+print("Nodes: {}, Edges: {}".format(G.nodes(), G.edges()))
+```
+
+It can also be useful to update the graph using a specified list of edges and vertices.
+
+```{python}
+help(G.update)
+```
+
+```{python}
+G.update([(1, 3), (2, 3)], [3, 10])
+print("Nodes: {}, Edges: {}".format(G.nodes(), G.edges()))
+```
+
+Vertices and edges can be also assigned attributes, which can be used to store additional information about the vertices and edges. For example, we can assign a color to each vertex or the coordinates of a vertex on a map. 
+
+```{python}
+G.nodes[1]["color"] = "red"
+G.nodes[2]["color"] = "blue"
+G.nodes[3]["color"] = "green"
+G.edges[1, 2]["weight"] = 0.5
+```
+
+To access the attributes of a vertex or an edge, we can use the following syntax:
+```{python}
+# Access the attributes of a vertex or an edge
+G.nodes[1], G.edges[1,2]
+```
+
+The attributes can also be assigned collectively using a dictionary through the ``set_node_attributes()`` and ``set_edge_attributes()`` functions.
+```{python}
+nx.set_node_attributes(G, {1: 'red', 2: 'blue', 3: 'green'}, 'color')
+nx.set_edge_attributes(G, {(1,2): 0.5}, 'weight')
+```
+
+```{python}
+# Print the color of each node
+for node in G.nodes():
+    print(f"Node {node} has color {G.nodes[node].get('color', 'N/A')}")
+```
+
+and to retrieve all vertices with their attributes, we can use the function ``nodes(data=True)``. Similarly, for edges we can use ``edges(data=True)``.
+
+```{python}
+G.nodes(data=True)
+```
+
+```{python}
+G.edges(data=True)
+```
+
+This simplifies the process of iterating over nodes and edges with their attributes
+```{python}
+for node in G.nodes(data=True):
+    print(node)
+```
+
+# Graph Visualization
+
+It is often useful to visualize the structure of a graph to get a better understanding of its properties. The library provides several built-in functions for visualizing graphs, such as the ``draw()`` function, which can be used to visualize the graph in a simple way.
+
+```{python}
+fig, ax = plt.subplots(figsize=(10, 10))
+nx.draw(G, with_labels=True, ax=ax)
+plt.show()
+```
+
+However, this is not the only way to visualize a graph. The way through which the vertices are arranged in the visualization is called a **layout**. The library provides several built-in layouts, such as the ``circular layout``, ``spring layout``, etc. 
+
+Simply put, we can choose the formation in which the vertices of the displayed graph will be arranged.
+```{python}
+# NetworkX contains a library of built-in graphs, to use for analysis, testing and exploration
+heawood = nx.heawood_graph()
+```
+
+```{python}
+nx.draw(heawood)
+```
+
+```{python}
+circ = nx.circular_layout(heawood)
+nx.draw(heawood, pos=circ)
+```
+
+The most common layouts are supported directly by variants of ``draw``.
+```{python}
+nx.draw_circular(heawood)
+```
+
+There is a billion different options and parameters to change the appearance of the graph, such as node size, color, edge width, etc.  As is tradition, consult the documentation if you want something specific: https://networkx.org/documentation/stable/reference/drawing.html#module-networkx.drawing
+```{python}
+help(nx.draw_networkx)
+```
+
+> **TASK 1**:
+> Try to find a layout that you like and visualize the graph with it. You can also try to change the appearance of the graph by changing the parameters of the draw function, such as node size, color, edge width, etc. Try to find a combination of parameters that you like and visualize the graph with it.
+
+```{python}
+# This cell contains a small sample of the different parameters you can use to change the appearance of the graph. Try changing them and see how it affects the plot!
+
+H = nx.barabasi_albert_graph(50, 2)
+
+fix, ax = plt.subplots(figsize=(10, 10))
+nx.draw(
+    H,
+    pos=nx.spring_layout(H),
+    # Change the default node color
+    node_color="#932626",
+    # node_color='lightblue',
+    # Node color can be changed also per-vertex by passing a list of colors,
+    # node_color=[H.degree(node) for node in H.nodes()],
+    # Change the default node size
+    node_size=100,
+    # Can also be changed per-vertex by passing a list of sizes,
+    # node_size=[H.degree(node) * 50 for node in H.nodes()],
+    # Change the default edge properties such as width and transparency
+    edge_color="#a0a0a0",
+    # Similarly, edge color and width can be changed globally or per-edge by passing a list of values
+    width=1,
+    alpha=0.7,
+    ax=ax,
+)
+```
+
+However, NetworkX package is primarily designed for computational network analysis.  Appropriate plotting of graphs is a complex problem and therefore it is often best to use specialized software for this purpose like [GraphViz](https://graphviz.org/) or [Cytoscape](https://cytoscape.org/).
+
+# Graph Properties
+
+An important property of a vertex is its degree, which is the number of edges it
+has to other vertices. The degree can be calculated with the ``degree()``
+function of the graph object.
+
+```{python}
+G.degree(3)
+```
+
+The following function returns all neighbors of the specified vertex
+```{python}
+list(G.neighbors(3))
+```
+
+```{python}
+for n in G.neighbors(3):
+    print(n)
+```
+
+However, if we want to traverse the neighbors of all vertices sequentially, there are more sophisticated functions ``G.adjacency()`` and ``G.adj``, see the documentation.
+
+```{python}
+help(G.adj)
+```
+
+```{python}
+G.adj
+```
+
+```{python}
+help(G.adjacency)
+```
+```{python}
+dict(G.adjacency())
+```
+
+A complete list of methods associated with the ``Graph`` object can be found at: https://networkx.org/documentation/stable/reference/classes/graph.html#networkx.Graph
+
+> **Task 2**
+> Implement the function ``cycle(n)``, which returns a cycle of length ``n``.
+
+```{python}
+def cycle(n):
+    G = nx.Graph()
+
+    # TODO
+
+    return G
+```
+
+```{python}
+# TODO: Compare your implementation with `nx.cycle_graph(n)`.
+```
+
+> **Task 3**
+> Implement the ``path(n)`` function that returns a path of length ``n``.
+
+```{python}
+def path(n):
+    G = nx.Graph()
+
+    # TODO
+
+    return G
+```
+
+```{python}
+# TODO: Compare your implementation with `nx.path_graph(n)`.
+```
+
+> **Task 4**
+> Implement the ``cartesian(G,H)`` function that returns the cartesian product for two given objects of type ``Graph``.
+
+```{python}
+def cartesian(G, H):
+    G_cartesian = nx.Graph()
+
+    # TODO
+
+    return G_cartesian
+```
+
+```{python}
+# TODO: Compare your implementation with `nx.cartesian_product(G, H)`.
+```
+
+# Prague Public Transport Network (PID)
+
+To apply the concepts of graph theory to a more tangible example, we will try analyze the public transport network of Prague.
+
+There are a number of interesting questions we can ask about the structure of the network, e.g.,
+- How many stops and connections does the network have?
+- What is the average degree of a stop, and what does the degree distribution look like?
+- What is the average shortest path length between stops?
+- Are there any 'sensitive' transit stops whose removal would significantly disrupt travel across the city?
+
+This notebook uses graph data from the [Prague Integrated Transport (PID) GTFS feed](https://data.pid.cz/PID_GTFS.zip), specifically the metro and tram lines.  We also make use of the [OSMNX package](https://github.com/gboeing/osmnx) for geographic projection and visualization of the network on a map.
+
+```{python}
+# The following code imports the PIDNetwork class from the prepared module and creates a graph object representing the Prague public transport network. The graph is stored in the variable PID.
+from prague_dataset import PIDNetwork
+
+PID_data = PIDNetwork()
+PID = PID_data.graph
+```
+
+The PID network is a `MultiDiGraph`, meaning that the edges are directed and multiple edges between the same pair of nodes are allowed. Directed edges model the fact that tram and metro routes travel in specific directions. Multiple edges between the same stops arise because different lines or trips may follow the same section of track. 
+```{python}
+type(PID)
+```
+
+To convert the ``MultiDiGraph`` to a simple undirected ``Graph``, we can use the built-in conversion function from NetworkX. This will merge all multiple edges between the same pair of nodes into a single undirected edge.
+
+```{python}
+PID_simple = nx.Graph(PID)
+```
+
+> **Task 4:**
+> Analyze the structure of the PID network. Try to answer the following questions:
+>  - What are the nodes of the network?
+>  - How many stops and connections does the network have? (i.e. number of nodes and edges) How does this compare to the simple graph?
+>  - What is the average degree of the multigraph graph? What is average degree of the simple graph? What does this tell us about the structure of the transit network?
+>  - What does the degree distribution of the multigraph and the simple graph look like? What does this tell us about the structure of the transit network?
+>  - Which nodes have the highest degree in the simple graph?
+
+```{python}
+# TODO: What are the nodes of the network? Print out the nodes and edges of the simple graph.
+```
+
+```{python}
+# TODO: How many stops and connections does the network have? (i.e. number of nodes and edges) How does this compare to the simple graph?
+```
+
+```{python}
+# TODO: What is the average degree of the multigraph graph? What is average degree of the simple graph? What does this tell us about the structure of the transit network?
+
+# TODO: Compute the average degree for the multigraph
+average_degree_multigraph = ...
+```
+
+```{python}
+# TODO: Compute the average degree for the simple graph
+average_degree_simple = ...
+```
+
+```{python}
+# TODO: Compute the histogram of the degree distribution for the multigraph. By that we mean a list where the value at index i is the number of nodes with degree i.
+degree_histogram_multigraph = []
+```
+
+```{python}
+# TODO: Compute the histogram of the degree distribution for the simple graph.
+degree_histogram_simple = []
+```
+
+```{python}
+# TODO: Which nodes have the highest degree in the simple graph?
+max_degree_nodes = None
+```
+
+```{python}
+# TODO: Print out and compute where do the nodes with the highest degree connect to
+```
+
+When you have the above tasks completed, the following code should give you a nice plot of the degree distribution for both the multigraph and the simple graph.
+
+```{python}
+# Plot two subplots for the degree distribution of the multigraph and the simple graph
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 10))
+
+ax1.bar(range(len(degree_histogram_multigraph)), degree_histogram_multigraph)
+ax1.set_title("Degree Distribution of Multigraph")
+
+ax2.bar(range(len(degree_histogram_simple)), degree_histogram_simple)
+ax2.set_title("Degree Distribution of Simple Graph")
+
+plt.show()
+```
+
+Coming back to the question of what is the structure of our network, one can ask what is the generative process behind the network? Is the network random? or does it follow some underlying laws on how it is created. In the lecture we talked about the **Scale-Free Property**. Many real-world networks follow this property, which means that the degree distribution of the network follows a power-law distribution. This means that there are many nodes with low degree and a few nodes with very high degree. These nodes with a very high degree in the network are called **hubs**. One can think of Twitter as a social network where prominent accounts represent hubs, having many more edges to other nodes than the average user.
+
+Our network is a real network. But does it follow the Scale-Free Property? Let's plot the degree distributions to find out! 
+
+```{python}
+# Plot the degree distribution on a log-log scale
+fig, ax = plt.subplots(figsize=(10, 5))
+
+ax.loglog(range(len(degree_histogram_simple)), degree_histogram_simple, "o-")
+ax.set_title("Log-Log Scale Degree Distribution of Simple Graph")
+
+plt.show()
+```
+
+If a graph's degree distribution follows the scale-free property, on a log-log scale plot the data points should form approximately a straight line, indicating the presence of hubs. In our figure above this seems to be roughly be the case.  This does seem to suggest that the Prague Metro and Tram Network has a scale-free structure, with a few highly connected stops (hubs) and many stops with fewer connections. 
+
+> **Task 5**
+> Visualize the network.  Try to find a suitable layout to display the graph, e.g., circular layout, spring layout, etc. You can find more information on the different layouts in the documentation: https://networkx.org/documentation/stable/reference/drawing.html#module-networkx.drawing.layout
+
+```{python}
+# TODO: Visualize the network using a suitable layout. Visualize both the multigraph and the simple graph.
+```
+
+Doesn't look much like the Prague transit network, does it?  One should keep in mind to never fully trust a graph visualization, as it can lead to false impressions about the properties of the graph.  The geographic structure is lost and nodes are positioned according to some layout algorithm.
+
+To visualize the network in a more realistic way, we can use the geographic coordinates of the stops. Fortunately, the nodes in our graph have attributes 'x' and 'y' which represent the longitude and latitude of the stops, respectively!
+```{python}
+pprint(
+    list(PID_simple.nodes(data=True))[:5]
+)
+```
+
+We can use these coordinates to create a geographic visualization of the network. This way we can get a better understanding of what the network looks like geographically and how the stops are connected to each other in space. We will use the OSMNX package for this (it will use the `x` and `y` attributes of the nodes). Don't worry about this code too much. Just take it as a nice bonus to visualize the network on a map! We can use it to understand some key things about the structure of the network, such as where are the hubs located, how are the different lines connected to each other, etc.
+
+```{python}
+import osmnx as ox
+import contextily as cx
+
+PID.graph["crs"] = "EPSG:4326"
+PID_proj = ox.project_graph(PID, to_crs="EPSG:3857")
+fig, ax = plt.subplots(figsize=(15, 15))
+fig, ax = ox.plot_graph(
+    PID_proj,
+    ax=ax,
+    # NOTE: Play with the following parameters to change the appearance of the plot! They are a bit different from networkx functions but most of the options overlap.
+    # Change the default node size
+    # node_size=50,
+    # Node size can be changed also per-vertex by passing a list of sizes,
+    node_size=[PID_proj.degree(node) * 5 for node in PID_proj.nodes()],
+    # Change the default node color
+    # node_color='#000000',
+    # Node color can be changed also per-vertex by passing a list of colors,
+    node_color=[PID_proj.degree(node) for node in PID_proj.nodes()],
+    # Change the default edge properties such as width and transparency
+    edge_linewidth=2,
+    edge_alpha=0.7,
+    # Similarly, edge color and width can be changed globally or per-edge by passing a list of values
+    edge_color="#a0a0a0",
+    # IMPORTANT: Keep the following lines in, if you want to add background maps
+    show=False,
+    bgcolor="none",
+)
+
+# NOTE: Uncomment one of the following lines to add a basemap to the plot. You can choose from different sources, such as OpenStreetMap, Stamen, CartoDB, etc. For example, you can use the following line to add an OpenStreetMap basemap:
+# cx.add_basemap(ax, source=cx.providers.CartoDB.Voyager)
+# cx.add_basemap(ax, source=cx.providers.CartoDB.DarkMatter)
+cx.add_basemap(ax, source=cx.providers.CartoDB.Positron)
+ax.set_axis_off()
+```
+
+This gives us a nice overview of how the Prague metro and tram network looks geographically! 
+
+# Network Attacks
+
+Now we can test some hypotheses about the structure of the network. Let's play a bit with the robustness of the network. We have already seen that the network has some hubs, which are stops with a high degree. These hubs are important for the connectivity of the network, as they connect different parts of the network together. We will test how robust the network is to random failures and targeted attacks.
+
+Here, we will measure the robustness of the network by the size of the **giant component**, which is the largest connected component in the graph. The giant component is important because it represents the largest part of the network that is still connected. If we remove some stops from the network, the giant component will shrink. The more critical stops we remove, the faster the giant component will shrink.
+
+We also know some basic robustness measurements, so it is time to see how robust our network really is. For this, we will attack the network's stops with two approaches: 
+
+1. Delete stops according to their degree, going from high-scoring stops to
+   low-scoring ones.
+2. Random stop failures, deleting stops at random.
+
+NOTE: To find the giant component, we can use the built-in function ``connected_components()`` which returns a list of all connected components in the graph. We can then find the largest one by using the built-in function ``max()`` with the key parameter set to the length of the component.
+```{python}
+largest_component = max(nx.connected_components(PID_simple), key=len)
+print(f"Giant component size: {len(largest_component)}")
+```
+
+```{python}
+# To choose a random node to remove, we can use the built-in function ``random.choice()`` which returns a random element from a list. We can use this function to randomly select a node from the list of nodes in the graph.
+random.choice(list(PID_simple.nodes()))
+```
+
+> **TASK 6**: 
+> Measure the robustness of the network by implementing the two approaches to delete stops and calculate the size of the giant component after each deletion. How many stops do we have to delete to shrink the giant component to half of its original size for each approach? Which approach is more damaging to the network and why? 
+
+```{python}
+# NOTE: It is a good idea to make a copy of the graph so we do not destroy it
+H_random = PID_simple.copy()
+H_degree = PID_simple.copy()
+
+# TODO: Implement the two approaches to delete stops and calculate the size of
+# the giant component after each deletion. Store the results in the following
+# lists.
+size_giant_random = []
+size_giant_degree = []
+
+# TODO: Store the nodes removed in the following lists
+nodes_removed_random = []
+nodes_removed_degree = []
+```
+
+```{python}
+# Plot the evolution of the giant component size as a function of the fraction of stops removed for both approaches.
+fig, ax = plt.subplots(figsize=(8, 5))
+
+ax.plot(range(len(size_giant_random)), size_giant_random, label="Random")
+ax.plot(range(len(size_giant_degree)), size_giant_degree, label="Degree-based")
+
+ax.set_xlabel("Nodes Removed")
+ax.set_ylabel("Giant Component Size")
+ax.legend()
+plt.show()
+```
+
+What does the figure above tell us? First of all, deleting stops that play an
+important role in the network (targeted attack) should lead to a faster shrinkage of
+the giant component than deleting stops at random!
+
+The cell bellow creates a fun visualization of how the network evolves as we delete nodes according to the two approaches. 
+
+```{python}
+from celluloid import Camera
+from matplotlib.lines import Line2D
+from IPython.display import HTML
+
+plt.rcParams["animation.embed_limit"] = 50
+
+pos = {n: (data["x"], data["y"]) for n, data in PID_proj.nodes(data=True)}
+
+# Subsample to ~80 frames so the animation stays light
+n_total = min(len(nodes_removed_degree), len(nodes_removed_random))
+step = max(1, n_total // 80)
+frame_indices = list(range(0, n_total, step))
+
+legend_handles = [
+    Line2D(
+        [0],
+        [0],
+        marker="o",
+        color="w",
+        markerfacecolor="#1a1a1a",
+        markersize=8,
+        label="Giant component",
+    ),
+    Line2D(
+        [0],
+        [0],
+        marker="o",
+        color="w",
+        markerfacecolor="#a0a0a0",
+        markersize=8,
+        label="Disconnected",
+    ),
+    Line2D(
+        [0],
+        [0],
+        marker="o",
+        color="w",
+        markerfacecolor="red",
+        markersize=8,
+        label="Removed",
+    ),
+]
+
+fig, (ax_deg, ax_rand) = plt.subplots(1, 2, figsize=(15, 8), layout="tight")
+camera = Camera(fig)
+
+print(f"[INFO] Building animation with {len(frame_indices)} frames ...")
+for i in frame_indices:
+    for ax, nodes_removed, label in [
+        (ax_deg, nodes_removed_degree, "Degree-based"),
+        (ax_rand, nodes_removed_random, "Random"),
+    ]:
+        removed = set(nodes_removed[:i])
+        sub = PID_simple.subgraph(set(PID_simple.nodes()) - removed)
+        giant = max(nx.connected_components(sub), key=len) if sub.nodes() else set()
+
+        node_colors = [
+            "red" if n in removed else "#1a1a1a" if n in giant else "#a0a0a0"
+            for n in PID_simple.nodes()
+        ]
+
+        nx.draw_networkx_edges(
+            sub, pos=pos, ax=ax, edge_color="#d0d0d0", width=0.5, alpha=0.5
+        )
+        nx.draw_networkx_nodes(
+            PID_simple, pos=pos, ax=ax, node_color=node_colors, node_size=10
+        )
+        ax.text(
+            0.5,
+            1.01,
+            f"{label}: {len(removed)} removed | giant: {len(giant)}",
+            transform=ax.transAxes,
+            ha="center",
+            fontsize=11,
+        )
+        ax.legend(handles=legend_handles, loc="lower left", fontsize=9)
+        ax.set_aspect("equal")
+        ax.set_axis_off()
+
+    camera.snap()
+
+ani = camera.animate(interval=150, repeat=False)
+print("[OK] Animation captured")
+ani.save("network_attack_evolution.gif", fps=5)
+print("[OK] Saved network_attack_evolution.gif")
+HTML(ani.to_jshtml())
+```
+
+# Shortest Paths and Distances
+
+In this section we will talk about some other basic measurements which will give us some idea about the structure of the graph. This will include what is the average shortest path distance between nodes, in which way are the nodes in the network connected to each other and how strong is the connection between a node and its neighbors.
+
+The shortest path *d(i,j)*, as the name suggests, is the path in the network between nodes  *i* and *j* which has the fewest edges. In the case of an undirected network, the shortest path between *i* and *j* is always the same regardless of which node we start from; however, in a directed network this does not hold true, and the shortest path between the nodes can vary depending on which node we start from. On the basis of the shortest path we can define many more measurements, e.g., the longest shortest path in the network is called the **diameter** of the graph and gives us a feeling of how far things are separated in the graph. 
+
+To compute the shortest path between two nodes we can use the built-in function ``shortest_path_length()``. 
+```{python}
+nx.shortest_path_length(PID_simple, source='Trojská', target='Malostranské náměstí')
+```
+
+Of course, this does not take into account the time spent waiting for a connection, time spent waiting at a stop nor the actual tram and metro lines. So take it with a grain of salt!
+
+```{python}
+path = nx.shortest_path(
+    PID_simple, source="Trojská", target="Malostranské náměstí", weight="avg_time_min"
+)
+print(f"Shortest path: {path}")
+```
+
+```{python}
+nx.average_shortest_path_length(PID_simple)
+```
+
+The edges of the simple graph are labeled with the property ``avg_time_min``, which gives the average travel time in minutes between the two stops. The ``weight`` parameter allows us to calculate the average shortest path length based on these travel times instead of the number of edges. This way we can get a more realistic estimate of how long it takes to travel between stops in the network.
+
+```{python}
+nx.shortest_path_length(
+    PID_simple, source="Trojská", target="Malostranské náměstí", weight="avg_time_min"
+)
+```
+
+```{python}
+nx.average_shortest_path_length(PID_simple, weight="avg_time_min")
+```
+
+> **TASK 7**: 
+> Calculate the diameter of the simple graph. What does this number mean in the context of a transit network? How does it compare to the average shortest path length? What does this tell us about the structure of the transit network?
+
+```{python}
+# TASK: Calculate the time for the largest shortest path in the simple graph. What does this number mean in the context of a transit network? How does it compare to the average shortest path time? What does this tell us about the structure of the transit network?
+
+max_path_time = None
+print(f"Maximum shortest path time: {max_path_time} minutes")
+```
+
+> **TASK 8**: 
+> Decreasing the travel time. Figure out a way to reduce the average shortest path by adding new connections. How many edges need to be added to decrease the average shortest path by 10%? 20%? 50%? What does this tell us about the structure of the transit network and its efficiency? Compare your strategy to the random strategy.
+
+```{python}
+# TODO: Compute a list of the average shortest path lengths as we add new connections to the network. Store the results in the following list.
+# WARNING: This can take a long time to compute depending on your strategy used, so either be patient or compute just a few steps to see the trend.
+average_shortest_paths = []
+
+# This list will store the pairs of stops that we add to the network as new connections.
+edges_added = []
+```
+
+When you have the above code completed, the following cell should give you a nice plot of how the average shortest path length evolves as we add new connections to the network according to the two approaches.
+
+```{python}
+# Plot the evolution of the giant component size as a function of the fraction of stops removed for both approaches.
+fig, ax = plt.subplots(figsize=(8, 5))
+
+ax.plot(
+    range(len(average_shortest_paths)), average_shortest_paths, label="Greedy best-pair"
+)
+ax.plot(
+    range(len(average_shortest_paths_random)),
+    average_shortest_paths_random,
+    label="Random",
+)
+
+ax.set_xlabel("Edges Added")
+ax.set_ylabel("Average Shortest Path Length")
+ax.legend()
+plt.show()
+```
+
+The cell below creates a fun animation of how the network evolves as we add new connections according to the two approaches.
+
+```{python}
+from celluloid import Camera
+from matplotlib.lines import Line2D
+from IPython.display import HTML
+
+plt.rcParams["animation.embed_limit"] = 50
+
+pos = {n: (data["x"], data["y"]) for n, data in PID_proj.nodes(data=True)}
+
+legend_handles = [
+    Line2D([0], [0], color="#d0d0d0", linewidth=2, label="Original edge"),
+    Line2D([0], [0], color="#2196F3", linewidth=2, label="Previously added"),
+    Line2D([0], [0], color="red", linewidth=2, label="Newly added"),
+]
+
+n_frames = min(len(edges_added), len(edges_added_random))
+fig, (ax_gr, ax_rnd) = plt.subplots(1, 2, figsize=(15, 8), layout="tight")
+camera = Camera(fig)
+
+print(f"[INFO] Building animation with {n_frames} frames ...")
+for i in range(n_frames):
+    for ax, edges, avg_paths, label in [
+        (ax_gr, edges_added, average_shortest_paths, "Greedy"),
+        (ax_rnd, edges_added_random, average_shortest_paths_random, "Random"),
+    ]:
+        nx.draw(
+            PID_simple,
+            pos=pos,
+            ax=ax,
+            node_color="#505050",
+            node_size=10,
+            edge_color="#d0d0d0",
+            width=0.5,
+            with_labels=False,
+        )
+        if i > 0:
+            # edgelist= lets us draw edges not present in PID_simple using its pos
+            nx.draw_networkx_edges(
+                PID_simple,
+                pos=pos,
+                ax=ax,
+                edgelist=edges[:i],
+                edge_color="#2196F3",
+                width=2,
+            )
+        nx.draw_networkx_edges(
+            PID_simple, pos=pos, ax=ax, edgelist=[edges[i]], edge_color="red", width=3
+        )
+        ax.text(
+            0.5,
+            1.01,
+            f"{label}: +{i+1} edges | avg path: {avg_paths[i+1]:.2f} min",
+            transform=ax.transAxes,
+            ha="center",
+            fontsize=11,
+        )
+        ax.legend(handles=legend_handles, loc="lower left", fontsize=9)
+        ax.set_aspect("equal")
+        ax.set_axis_off()
+
+    camera.snap()
+
+print("[OK] Animation captured")
+ani = camera.animate(interval=300, repeat=False)
+ani.save("network_evolution.gif", fps=2)
+print("[OK] Saved network_evolution.gif")
+HTML(ani.to_jshtml())
+```
+
+> **TASK 9**: 
+> Do the same analysis, but for the diameter instead of the average shortest path length.
+
+```{python}
+# TODO
+```
