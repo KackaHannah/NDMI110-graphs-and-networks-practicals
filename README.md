@@ -21,6 +21,28 @@ If you are unable to attend the practical tutorial from any reason (or if you
 fail to be active enough), you can send your solution anytime before the next
 tutorial, by which you can gain 5 points. 
 
+## Schedule
+
+Here are the adjusted tables for the 2026 schedule with the "Material" column removed.
+
+### 1. Tutorial Schedule 2026
+
+| week | Date | Character | Event | Topic |
+|:---|:---|:---|:---|:---|
+| 1 | 16.2.2026 | — | — | *Skipped (Week 1)* |
+| 2 | 23.2.2026 | practical tutorial | **1P** | introduction, working with graphs |
+| 3 | 2.3.2026 | theoretical tutorial | | small-world character |
+| 4 | 9.3.2026 | practical tutorial | **2P** |  |
+| 5 | 16.3.2026 | **Test** + theoretical | **1T** |  |
+| 6 | 23.3.2026 | practical tutorial | **3P** |  |
+| 7 | 30.3.2026 | theoretical tutorial | |  |
+| 8 | 6.4.2026 | **Cancelled** | — | **Easter Monday** |
+| 9 | 13.4.2026 | practical tutorial | **4P** |  |
+| 10 | 20.4.2026 | **Test** + theoretical | **2T** |  |
+| 11 | 27.4.2026 | theoretical tutorial | |  |
+| 12 | 4.5.2026 | practical tutorial | **5P** |  |
+| 13 | 11.5.2026 | theoretical tutorial | |  |
+| 14 | 18.5.2026 | **Test** + practical | **3T + 6P** | |
 
 ## Environment Setup
 
