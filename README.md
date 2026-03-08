@@ -4,6 +4,8 @@ Tutorials are in turns practical and theoretical. During practical tutorials we
 will work with specific graphs and real-world networks. On theoretical tutorials
 we will deepen our understanding of theoretical knowledge gained from lectures.
 
+There is a mirror of this repository at [MFF Gitlab](https://gitlab.mff.cuni.cz/kubekd/ndmi110-graphs-and-networks#)
+
 ## Gaining tutorial credit
 
 Throughout the semester there will be 3 short tests oriented on understanding
