@@ -25,8 +25,6 @@ tutorial, by which you can gain 5 points.
 
 ## Schedule
 
-Here are the adjusted tables for the 2026 schedule with the "Material" column removed.
-
 ### 1. Tutorial Schedule 2026
 
 | week | Date | Character | Event | Topic |
