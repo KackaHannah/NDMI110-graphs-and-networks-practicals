@@ -4,6 +4,8 @@ Tutorials are in turns practical and theoretical. During practical tutorials we
 will work with specific graphs and real-world networks. On theoretical tutorials
 we will deepen our understanding of theoretical knowledge gained from lectures.
 
+There is a mirror of this repository at [MFF Gitlab](https://gitlab.mff.cuni.cz/kubekd/ndmi110-graphs-and-networks#)
+
 ## Gaining tutorial credit
 
 Throughout the semester there will be 3 short tests oriented on understanding
@@ -22,8 +24,6 @@ fail to be active enough), you can send your solution anytime before the next
 tutorial, by which you can gain 5 points. 
 
 ## Schedule
-
-Here are the adjusted tables for the 2026 schedule with the "Material" column removed.
 
 ### 1. Tutorial Schedule 2026
 

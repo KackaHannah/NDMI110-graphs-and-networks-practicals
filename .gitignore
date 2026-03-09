@@ -178,3 +178,5 @@ pyrightconfig.json
 
 # Local instructor-only Quarto content
 **/*.local.qmd
+
+/.luarc.json

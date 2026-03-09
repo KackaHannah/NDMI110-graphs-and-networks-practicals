@@ -1,0 +1,840 @@
+---
+title: Centrality measures
+jupyter: python3
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    number-sections: true
+---
+
+During this tutorial we will first look at some local and global characteristics of networks. These characteristics can help us understand the structure of networks and identify important nodes when visualization is not possible. We showcase the concepts on a real world network of actors from the IMDB database.
+
+# Introduction
+
+For a smaller networks it is possible to visualize the networks and get some basic idea about their structure. However, as networks grow larger it becomes more and more difficult.
+
+A better approach is to define some mathematical measures that capture interesting features of a network structure quantitatively and try to boil down complex structural data in to simple numbers. Many such measures have been proposed over the years and we will discuss some of them.
+
+Main concept in this area is the concept of centrality. The question that is being addressed is
+
+> Which is the most important or the central node in a a network?
+
+There are many possible interpretations and ways to answer this question. Each yield a different centrality measure.
+
+```{python}
+import time
+import matplotlib.pyplot as plt
+import numpy as np
+import networkx as nx
+import tqdm as tqdm
+import math
+from pathlib import Path
+
+import warnings
+
+warnings.filterwarnings("ignore")
+```
+
+```{python}
+# Define some toy graphs to work with
+p8 = nx.path_graph(8)
+star = nx.star_graph(8)
+house = nx.house_graph()
+
+toy_graphs = {"path": p8, "star": star, "house": house}
+```
+
+# Degree centrality
+
+> the most connected nodes are the most central
+
+Although this measure is very simple, it can still be very illuminating. The motivation for this measure might be:
+
+- (social) individuals who have many friends or acquaintances might have more
+  influence
+- (citation) the number of citations a paper receives might be a measure of
+  its importance
+- (biology) the number of interactions a protein has with other proteins might
+  be a measure of its importance in the cell
+- (transportation) the number of connections a city has to other cities might be
+  a measure of its importance in the transportation network
+
+**Definition (Degree Centrality)**
+
+The **degree centrality** of a vertex $v$ in a graph $G$ with $n$ vertices is:
+$$
+C_D(v) = \frac{1}{n-1}\mathrm{deg}(v)
+$$
+
+Another advantage of the degree centrality is that it is extremely easy to compute. Therefore, it is a good starting point for understanding the network structure especially when we are dealing with large networks.
+
+> **Task 1: Implement degree centrality**
+>
+> Implement the function `degree_centrality` which computes degree centrality for each node in a given graph G.
+
+```{python}
+def degree_centrality(G: nx.Graph) -> dict:
+    centrality = {}
+
+    # TODO: Calculate degree centrality for each node
+
+    return centrality
+```
+
+The `NetworkX` library has a built-in function for computing degree centrality ``nx.degree_centrality(G)``.
+
+> **Task 2: Compare degree centrality with NetworkX**
+>
+> Compare your `degree_centrality` implementation with `nx.degree_centrality(G)`. Use `math.isclose` for floating-point comparisons. Test on all three toy graphs.
+
+**Note**
+
+Use [`math.isclose`](https://docs.python.org/3/library/math.html#math.isclose) or [`numpy.isclose`](https://numpy.org/doc/stable/reference/generated/numpy.isclose.html) to compare floating-point values for equality rather than `==`. Floating-point arithmetic can introduce small rounding errors, so two mathematically equal values may not be bitwise equal.
+
+```{python}
+# TODO: Compare your implementation of degree centrality with the implementation
+# from NetworkX. Use the toy graphs defined above to test your implementation.
+```
+
+```{python}
+# Plot the degree centrality for the toy graphs. Color the nodes according to
+# their degree centrality and add labels with the degree centrality values.
+
+fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+for ax, (name, G) in zip(axes, toy_graphs.items()):
+    centrality = degree_centrality(G)
+    node_colors = [centrality[node] for node in G.nodes()]
+
+    nx.draw(G, with_labels=True, node_color=node_colors, cmap=plt.cm.viridis, ax=ax)
+
+    ax.set_title(f"{name.capitalize()} Graph")
+```
+
+# Eccentricity
+
+The first measure based on path length we look at is eccentricity. 
+
+> the most central nodes are those with the smallest maximum distance to all other nodes
+
+**Definition (Eccentricity)**
+
+The **eccentricity** of vertex $v$ is the maximum shortest-path distance to any
+other vertex:
+$$
+\epsilon(v) = \max_{u \in V} d(v, u)
+$$
+The **eccentricity centrality** uses the reciprocal so that higher values
+correspond to more central nodes:
+$$
+C_E(v) = \frac{1}{\epsilon(v)}
+$$
+
+> **Task 3: Implement eccentricity**
+>
+> Implement the function `eccentricity` which computes the eccentricity for each node in a given graph G.
+
+```{python}
+def eccentricity(G: nx.Graph) -> dict:
+    eccentricity = {}
+
+    # TODO: Calculate eccentricity for each node
+
+    return eccentricity
+```
+
+The `NetworkX` library has a built-in function for computing eccentricity ``nx.eccentricity(G)``.
+
+> **Task 4: Compare eccentricity with NetworkX**
+>
+> Compare your `eccentricity` implementation with `nx.eccentricity(G)`. Test on all three toy graphs.
+
+```{python}
+# TODO: Compare your implementation of eccentricity with the implementation from
+# NetworkX. Use the toy graphs defined above to test your implementation.
+```
+
+> **Task 5: Visualize eccentricity**
+>
+> Plot the eccentricity for all three toy graphs. Color nodes by eccentricity centrality $C_E(v) = 1/\epsilon(v)$.
+
+```{python}
+# TODO: Plot the eccentricity for the toy graphs. Color the nodes according to
+# their eccentricity and add labels with the eccentricity values.
+```
+
+# Closeness centrality
+
+The eccentricity measure might be too strict in some cases. For instance, if a node is very close to most other nodes, but has one node that is very far away, it will have a high eccentricity. The closeness centrality relaxes this strictness by considering the average distance from a node to all other nodes, rather than the maximum distance.
+
+> the most central nodes are those with the smallest average distance to other nodes
+
+This centrality takes low values for nodes that are separated from others by only a short distance on average. It is plausible that such nodes might have a more direct influence on others or better access. In social networks for instance a person with a lower mean distance to others might find that their opinions spread through the community more quickly that other people.
+
+**Definition (Closeness Centrality)**
+
+The **mean distance** from vertex $v$ to all other vertices is:
+$$
+\bar{d}(v) = \frac{1}{n-1} \sum_{u \in V} d(v, u)
+$$
+The **closeness centrality** is the reciprocal, so that more-central nodes have
+higher values:
+$$
+C_C(v) = \frac{1}{\bar{d}(v)} = \frac{n-1}{\sum_{u \in V} d(v, u)}
+$$
+
+> **Task 6: Implement closeness centrality**
+>
+> Implement the function `closeness_centrality` which computes the closeness centrality for each node in a given graph G.
+
+```{python}
+def closeness_centrality(G: nx.Graph) -> dict:
+    centrality = {}
+
+    # TODO: Calculate closeness centrality for each node
+
+    return centrality
+```
+
+The `NetworkX` library has a built-in function for computing closeness centrality ``nx.closeness_centrality(G)``.
+
+> **Task 7: Compare closeness centrality with NetworkX**
+>
+> Compare your `closeness_centrality` implementation with `nx.closeness_centrality(G)`. Test on all three toy graphs.
+
+```{python}
+# TODO: Compare your implementation of closeness centrality with the
+# implementation from NetworkX. Use the toy graphs defined above to test your
+# implementation.
+```
+
+> **Task 8: Visualize closeness centrality**
+>
+> Plot the closeness centrality for all three toy graphs. Color each node by its closeness centrality value.
+
+```{python}
+# TODO: Plot the closeness centrality for the toy graphs. Color the nodes
+# according to their closeness centrality and add labels with the closeness
+# centrality values.
+```
+
+# Betweenness centrality
+
+A different concept of node importance is that we capture the idea of a node being a "bridge" between other nodes. 
+
+> the most central nodes are those that lie on the largest number of shortest paths between other nodes
+
+A node that lies on many shortest paths between other nodes might be considered important because it can control the flow of information or influence between those nodes. For instance, in a social network, a person who connects two otherwise separate groups might have high betweenness centrality and could be influential in spreading information between those groups.
+
+**Definition (Betweenness Centrality)**
+
+The **betweenness centrality** of vertex $v$ is:
+$$
+C_B(v) = \sum_{s \neq v \neq t} \frac{\sigma_{st}(v)}{\sigma_{st}}
+$$
+where $\sigma_{st}$ is the total number of shortest paths from $s$ to $t$, and $
+\sigma_{st}(v)$ is the number of those paths passing through $v$.
+
+It is possible that a node has a low degree but high betweenness centrality if it serves as a critical bridge between different parts of the network. Conversely, a node with a high degree might have low betweenness centrality if it is mostly connected to nodes that are already well-connected.
+
+> **Task 9: Betweenness vs degree centrality example**
+>
+> Create an example of a network where one node has **low degree but high betweenness centrality** and another node has **high degree but low betweenness centrality**.
+
+```{python}
+# TODO: Create an example of a network where one node has low degree but high
+# betweenness centrality and another node has high degree but low betweenness
+# centrality. You can use NetworkX to create and visualize the graph.
+...
+```
+
+The nodes with the hightest betweenness are the ones whose removal from a network will most disrupt the flow of information between other nodes in a sense that they are on the most shortest paths between other nodes.
+
+> **Bonus Task: PID network attack analysis**
+>
+> Revisit the PID network from Tutorial 1 and identify the nodes with the highest betweenness centrality. Would targeted attacks on these nodes be more effective at disrupting network flow than attacks on nodes with high degree centrality?
+
+We can also define a global characteristic of a graph based on betweenness centrality, which is the sum of the betweenness centrality of all nodes in the graph. This is called global betweenness centrality and it can be used to measure how "centralized" a graph is in terms of its shortest paths.
+
+**Definition (Global Betweenness Centrality)**
+
+The **global betweenness centrality** of a graph $G$ is:
+$$
+C_B(G) = \frac{1}{n}\sum_{v \in V} C_B(v)
+$$
+
+## Properties of global betweenness centrality
+
+### Global betweenness centrality and average path length
+
+The global betweenness centrality of a graph is related to its average shortest path length.
+
+**Theorem 1 (Global betweenness and average path length)**
+
+Let $G$ be an undirected graph of size $|V(G)| = n$, $L(G)$ its average shortest
+path length, and $C_B(G)$ its global betweenness centrality. Then:
+$$
+C_B(G) = \frac{n-1}{2}\bigl(L(G) - 1\bigr)
+$$
+
+### Betweenness monotonicity
+
+**Proposition (Betweenness Monotonicity)**
+
+Adding a new edge to a graph can only possibly **decrease** the global betweenness centrality. A new edge cannot increase the path lengths between any pair of vertices. The average path length cannot increase, and thus the global betweenness centrality cannot increase by the previous theorem.
+
+### Adding edges
+
+In fact, the change in global betweenness centrality after adding a new vertex can be bounded by the following lemma:
+
+**Lemma 2 (Adding an edge)**
+
+Let $G$ be a graph of size $n$ and $G'$ the graph obtained from $G$ by adding an
+edge between vertices $u, v$ at distance $d = d_G(u,v) > 1$. Then:
+$$
+C_B(G') \leq C_B(G) - \frac{d-1}{n}
+$$
+
+**Corollary 3 (Spanning subgraph)**
+
+Let $G = (V, E)$ be a graph, $G' = (V, E')$ a spanning subgraph, and $r = |E
+\setminus E'|$. Then:
+$$
+C_B(G) \leq C_B(G') - \frac{r}{n}
+$$
+
+**Corollary 4 (Spanning tree bound)**
+
+Let $G = (V, E)$ be a graph with $|V| = n$ and $|E| = m$, and let $T$ be a
+spanning tree of $G$. Then:
+$$
+C_B(G) \leq C_B(T) - \frac{m - n + 1}{n}
+$$
+
+#### Average path length
+
+Average shortest path length can be also easily computed using NetworkX. The algorithm for counting the lengths of paths in weighted graphs is Dijkstra's algorithm by default, other options are algorithms of Bellman-Ford and Floyd-Warshall. See the documentation for details,
+
+```{python}
+p8_avg_length = nx.average_shortest_path_length(p8)
+print("Path on 8 vertices: {: 0.2f}".format(p8_avg_length))
+
+house_avg_length = nx.average_shortest_path_length(house)
+print("House: {: 0.2f}".format(house_avg_length))
+
+star_avg_length = nx.average_shortest_path_length(star)
+print("Star: {: 0.2f}".format(star_avg_length))
+```
+
+> **Task 10: Implement global betweenness centrality**
+>
+> Write a function `global_betweenness_centrality` that computes the global betweenness centrality of graph $G$. Which of the three toy graphs do you expect to have the largest and lowest value? Guess first, then verify computationally.
+>
+> Use the `betweenness_centrality` function from NetworkX to compute the betweenness centrality of each node.
+
+```{python}
+def global_betweenness_centrality(G: nx.Graph) -> float:
+    global_betweenness = 0.0
+
+    # TODO: Calculate global betweenness centrality for the graph G
+
+    return global_betweenness
+```
+
+> **Task 11: Verify betweenness vs average path length (Theorem 1)**
+>
+> Use your `global_betweenness_centrality` function to write `verify_betweenness_path_length_relation` that checks **Theorem 1** on several graphs.
+
+```{python}
+def verify_betweenness_path_length_relation(G: nx.Graph) -> bool:
+    """
+    Verify the relation between global betweenness centrality and average path length for a given graph G.
+
+    Return True if the relation holds, False otherwise.
+    """
+
+    # TODO
+
+    return False
+```
+
+#### Spanning tree
+
+**Note**
+
+A **spanning tree** of $G$ is a subgraph that is a tree covering all vertices. See [`nx.minimum_spanning_tree`](https://networkx.org/documentation/stable/reference/algorithms/generated/networkx.algorithms.tree.mst.minimum_spanning_tree.html) for NetworkX's implementation.
+
+> **Task 12: Verify spanning tree bound (Corollary 4)**
+>
+> Implement `verify_betweenness_spanning_tree_relation` to check **Corollary 4**. Compute the global betweenness and the error term $\frac{m-n+1}{n}$ and verify the inequality.
+
+```{python}
+def verify_betweenness_spanning_tree_relation(G: nx.Graph) -> bool:
+    """
+    Verify the relation between global betweenness centrality of a graph G and its spanning tree.
+
+    Return True if the relation holds, False otherwise.
+    """
+
+    # TODO
+
+    return False
+```
+
+### Adding vertices
+
+**Definition (k-Neighborhood)**
+
+The **$k$-neighborhood** of vertex $v$ is the set of vertices at exactly
+distance $k$:
+$$
+\Gamma_k(v) = \{u \in V : d(u, v) = k\}
+$$
+
+**Theorem 5 (Adding a leaf vertex)**
+
+Let $G$ be a graph of size $n$, $w \in V$ a vertex with eccentricity $
+\epsilon(w)$, and $G'$ the graph obtained from $G$ by adding a new vertex $u$
+connected only to $w$. Then:
+$$
+C_B(G') = \frac{n}{n-1}\,C_B(G) + \frac{1}{n-1} \sum_{k=1}^{\epsilon(w)} k|\Gamma_k(w)|
+$$
+where $\Gamma_k(w)$ is the set of vertices at distance $k$ from $w$.
+
+**Proposition 6 (Adding a vertex with two neighbours)**
+
+Let $G$ be a graph of size $n$ and $G'$ the graph obtained by adding a new
+vertex $w$ connected to vertices $u, v$ with $1 \leq d(u,v) \leq 2$. Then:
+$$
+\frac{1}{n+1}\bigl(n\,C_B(G) + n - 2\bigr) \leq C_B(G')
+$$
+
+> **Task 13: Verify Proposition 6 on a star**
+>
+> Verify **Proposition 6** by implementing `verify_betweenness_after_adding_vertex`. Test by adding a new vertex connected to two leaf nodes of a star graph.
+
+```{python}
+def verify_betweenness_after_adding_vertex(G: nx.Graph, u: int, v: int) -> bool:
+    """
+    Verify the bound on the change of global betweenness after adding a new vertex connected to two leafs of a star.
+
+    Return True if the bound holds, False otherwise.
+    """
+
+    # TODO
+
+    return False
+```
+
+# Centralities in real networks
+
+Let's now look at the behavior of these centrality measures on a real world network. We will use a network of actors from the IMDB database. In this network, nodes represent actors and edges represent co-appearances in movies. The dataset contains information about the actors, such as their age and nationality.
+
+## Loading network data
+
+Real world networks are stored and exchanged in many different formats. Some of these formats are human-readable, while others are not. Some of these formats are more compact than others, while some are more verbose. Some of these formats are more suitable for certain types of networks than others.
+
+The NetworkX library supports many different formats for loading and saving graphs. Some of these formats are:
+
+- [GML](https://networkx.org/documentation/stable/reference/readwrite/gml.html?highlight=gml#module-networkx.readwrite.gml)
+  - advantages: human-readable, supports attributes, widely used in network
+    analysis
+  - disadvantages: can be verbose for large graphs, not as compact as some other
+    formats
+- [GraphML](https://networkx.org/documentation/stable/reference/readwrite/graphml.html)
+  - advantages: human-readable, supports attributes, widely used in network
+    analysis, based on XML which is a widely used format for data exchange
+  - disadvantages: can be verbose for large graphs, not as compact as some other
+    formats, XML parsing can be slow for very large graphs
+- [JSON](https://networkx.org/documentation/stable/reference/readwrite/json_graph.html)
+  - advantages: human-readable, widely used for data exchange, easy to parse in
+    many programming languages
+  - disadvantages: can be verbose for large graphs, not as compact as some other
+    formats
+- [SparseGraph6](https://networkx.org/documentation/stable/reference/readwrite/sparsegraph6.html)
+  - advantages: compact for large and sparse graphs, widely used in graph theory
+    research
+  - disadvantages: not human-readable, only supports non-oriented graphs
+- [Pajek](http://vlado.fmf.uni-lj.si/pub/networks/pajek/doc/draweps.htm)
+  - advantages: human-readable, supports attributes, widely used in network
+    analysis
+  - disadvantages: can be verbose for large graphs, not as compact as some other
+    formats
+
+Here is an example of how to write and read a graph in GML format using NetworkX:
+```{python}
+# Create a simple graph
+G = nx.heawood_graph()
+
+# Write the graph to a GML file
+
+nx.write_gml(G, 'heawood.gml')
+
+# Read the graph from the GML file
+
+G_loaded = nx.read_gml('heawood.gml')
+
+# Check if the loaded graph is the same as the original graph
+
+nx.is_isomorphic(G, G_loaded)
+```
+
+Similarly, other formats can be used to write and read graphs using the corresponding functions in NetworkX. See [Reading and writing graphs](https://networkx.org/documentation/stable/reference/readwrite/index.html).
+
+> **Task: Download the IMDB actor network graph* 
+>
+> Download the IMDB actor network graph in GraphML format from the following [link](https://filr.cs.cas.cz/filr/public-link/file-download/2c9681489c464d67019ccf20829e247e/812/6287691380855764579/imdb_actor_network.graphml)
+
+```{python}
+# Load the imdb network
+# TODO: Replace the path with the actual path to the graph file
+imdb_graph_path = Path("imdb_data/imdb_actor_network.graphml")
+```
+
+The vertices of the IMDB graphs are unique identifiers for actors in the IMDB
+database. The graph also contains attributes for each node, such as the actor
+name, age and nationality. The edges of the graph represent co-appearances in
+movies, so if two actors have appeared in the same movie, there is an edge
+between them.
+
+```{python}
+IMDB = nx.read_graphml(imdb_graph_path)
+print(IMDB)
+```
+
+**Warning**
+
+The IMDB graph is quite large, so some operations might take a while to compute depending on your hardware. Be careful when running operations that have high time complexity or when plotting the graph. We will focus only on a subset of the graph to avoid long computations.
+
+```{python}
+# Print first 5 nodes and their attributes
+for i, (node, data) in enumerate(IMDB.nodes(data=True)):
+    if i >= 5:
+        break
+    print(f"Node: {node}, Attributes: {data}")
+```
+
+```{python}
+IMDB.nodes["nm0000138"]
+```
+
+```{python}
+# Print the number of components
+len(list(nx.connected_components(IMDB)))
+```
+
+> **Task 14: Compute IMDB degree centrality**
+>
+> Compute the degree centrality for all nodes in the IMDB graph using your `degree_centrality` implementation. Use `%%timeit` to measure performance.
+
+```{python}
+%%timeit
+# TODO
+IMDB_degree_centrality = ...
+```
+
+> **Task 15: Benchmark against NetworkX**
+>
+> Compute the degree centrality using `nx.degree_centrality(G)` and compare results with your implementation. Use `%timeit` to benchmark. Is the built-in noticeably faster?
+
+```{python}
+# TODO: Compute the degree centrality for all nodes in the IMDB graph using the
+# built-in function from NetworkX and compare the results with your
+# implementation. Is it noticably faster than your implementation?
+%timeit None
+```
+
+**Jupyter timeit magic commands**
+
+- `%%timeit` runs the **entire cell** multiple times and reports the average
+  execution time.
+- `%timeit` runs a **single line** multiple times and reports the average
+  execution time.
+
+**Warning**
+
+Using `%%timeit` or `%timeit` on a slow function can take a very long time since it runs the code multiple times. Use `%time` for a single measurement instead.
+
+> **Task 16: Visualize degree centrality distribution**
+>
+> Plot a histogram of the degree centrality values for all nodes in the IMDB graph.
+
+```{python}
+# TODO: Visualize the distribution of degree centrality values for the IMDB
+# graph using a histogram.
+
+plt.figure(figsize=(8, 6))
+
+# TODO: Plot the histogram of degree centrality values. Use `plt.hist()`
+# function
+...
+
+plt.title("Distribution of Degree Centrality in IMDB Actor Network")
+plt.xlabel("Degree Centrality")
+plt.ylabel("Frequency")
+plt.show()
+```
+
+Since the IMDB graph is quite large, it might be computationally expensive to compute closeness centrality for all nodes in the graph. Instead, we can focus on a subset of the graph, such as the top 100 actors by degree centrality, and compute closeness centrality only for those actors.
+
+> **Task 17: Select top-N actors by degree centrality**
+>
+> Sort all IMDB nodes by degree centrality and select the top `N = 100` actors.
+
+```{python}
+# TODO: Sort and pick the top `N` actors with the largest degree centrality.
+N = 100
+IMDB_top_degree_nodes = ...
+```
+
+```{python}
+# Print the top 10 actors by degree centrality along with their degree
+# centrality values
+print("\n" + "=" * 80)
+print(f"TOP 10 ACTORS BY DEGREE CENTRALITY")
+print("=" * 80)
+
+for rank, actor in enumerate(IMDB_top_degree_nodes[:10]):
+    node_data = IMDB.nodes[actor]
+    display_name = node_data.get("name", actor)
+    age = node_data.get("age", -1)
+    age_str = f"{age} yrs" if age != -1 else "Unknown age"
+    prof = str(node_data.get("profession", "Unknown")).split(",")[0].capitalize()
+    nat = node_data.get("nationality", "Unknown")
+
+    print(
+        f"{rank+1:2d}. {display_name:<22} | Degree Centrality: {IMDB_degree_centrality[actor]:.4f} | {age_str:<7}  Nationality: {nat}"
+    )
+```
+
+We can also visualize the relationship using the adjacency matrix for the top actors. 
+
+```{python}
+# Plot the adjacency matrix of the subgraph of the top 100 actors by degree
+# centrality
+fig, ax = plt.subplots(figsize=(10, 10))
+subgraph = IMDB.subgraph(IMDB_top_degree_nodes)
+adj_matrix = nx.to_numpy_array(subgraph)
+ax.imshow(adj_matrix, cmap="Blues")
+ax.set_title("Adjacency Matrix of Top 100 Actors by Degree Centrality")
+ax.set_xlabel("Actors")
+ax.set_ylabel("Actors")
+plt.show()
+```
+
+As you can see the matrix is quite dense, which means that the top actors are highly connected with each other. This is a common phenomenon in social networks called "rich-club phenomenon", where the most connected nodes tend to be connected to each other.
+
+The code below plots the subgraph of the top 100 actors by degree centrality using an interactive visualization library called [``Sigma``](https://www.sigmajs.org/).
+
+```{python}
+# Plot the subgraph of the top 100 actors by degree centrality
+from ipysigma import Sigma
+
+subgraph = IMDB.subgraph(IMDB_top_degree_nodes).copy()
+
+# Attach degree centrality as a node attribute so Sigma can use it for sizing
+nx.set_node_attributes(subgraph, IMDB_degree_centrality, "degree_centrality")
+
+Sigma(
+    subgraph,
+    # Labels: use the human-readable actor name stored as an attribute
+    node_label="name",
+    # Color nodes by nationality (categorical - each country gets a distinct color)
+    node_color="nationality",
+    # Size nodes by degree centrality: more-connected actors appear larger
+    node_size="degree_centrality",
+    # Run the ForceAtlas2 layout for 5 s on load so the graph settles visually
+    start_layout=5,
+    # Show every label, not just those passing the density threshold
+    # show_all_labels=True,
+    # Let students click an edge to inspect which two actors co-starred
+    # clickable_edges=True,
+)
+```
+
+> **Task 18: Compute closeness centrality for top-N actors**
+>
+> Compute the closeness centrality for only the top `N` actors by degree centrality. Vary `N` to observe how computation time scales.
+
+```{python}
+# TODO: Compute the closeness centrality for the top `N` actors by degree
+# centrality using your implementation of closeness centrality. Compare the
+# results with the built-in function from NetworkX. Is it noticably faster than
+# your implementation?
+
+# TODO: Dictionary containing the closeness centrality values for the *only* top
+# `N` actors by degree centrality
+IDMB_closeness_centrality = {}
+
+# TODO: List containing the top `N` actors ordered by closeness centrality
+IMDB_top_closeness_centrality = []
+
+# TODO: Try to vary the value of `N` and see how it affects the computation
+# time.
+```
+
+> **Task 19: Print top-10 actors by closeness centrality**
+>
+> Print the top 10 actors ranked by closeness centrality together with their name, age, and nationality.
+
+```{python}
+# TODO: Print the top 10 actors by closeness centrality
+...
+```
+
+Question: How does degree centrality correlate with closeness centrality in this actor network? Do the most connected actors also tend to be the most "central" in terms of closeness, or are there some actors who are less connected but still have high closeness centrality?
+
+> **Task 20: Degree vs closeness rank scatter plot**
+>
+> Plot the degree-centrality rank (x-axis) against the closeness-centrality rank (y-axis) for the top `N` actors. Add the perfect-correlation diagonal as a reference line.
+
+```{python}
+# TODO: Visualize the relationship between degree centrality and closeness
+# centrality. Plot the rank of actors by degree centrality on the x-axis and
+# their rank by closeness centrality on the y-axis. Do you see a correlation
+# between the two measures?
+# Are the highest degree actors also the most "central" in terms of closeness,
+# or are there some actors who are less connected but still have high closeness
+# centrality?
+
+plt.figure(figsize=(8, 6))
+
+# TODO: Plot the rank of actors by degree centrality on the x-axis and their
+# rank by closeness centrality on the y-axis. Use a scatter plot to visualize
+# the relationship between the two measures.
+...
+
+# Perfect correlation
+plt.plot([1, N], [1, N], color="red", linestyle="--", label="Perfect Correlation")
+
+plt.title("Degree Centrality Rank vs Closeness Centrality Rank (Top 100 Actors)")
+plt.xlabel("Degree Centrality Rank")
+plt.ylabel("Closeness Centrality Rank")
+plt.legend()
+plt.show()
+```
+
+Question: How does age correlate with centrality measures? Are older actors more likely to be central in the network, or do younger actors also have significant centrality?
+
+> **Task 21: Age vs degree centrality scatter plot**
+>
+> Plot each actor's age (x-axis) against their degree centrality (y-axis) for the top 100 actors.
+
+```{python}
+# TODO: Plot age vs degree centrality for all actors in the top 100 by degree
+# centrality
+plt.figure(figsize=(8, 6))
+
+# TODO:
+...
+
+plt.title("Age vs Degree Centrality (Top 100 Actors)")
+plt.xlabel("Age")
+plt.ylabel("Degree Centrality")
+plt.show()
+```
+
+> **Task 22: Czech / Slovak actor analysis**
+>
+> Repeat the degree and closeness centrality analysis restricted to actors from the Czech Republic or Slovakia (or another country of your choice). Are there differences compared to the global top-100?
+
+```{python}
+# Filter actors from Czech Republic / Slovakia
+IMDB_czsk_actors = [
+    actor
+    for actor, data in IMDB.nodes(data=True)
+    if data.get("nationality") in ["Czech Republic", "Slovakia"]
+]
+IMDB_czsk_actors
+```
+
+## PID network revisited
+
+In Tutorial 1 we loaded the Prague Integrated Transport (PID) metro and tram network and studied its degree distribution and robustness.
+Here we revisit that network from a centrality perspective.
+
+Recall the key claims from that tutorial:
+- Random node failures barely shrink the giant component.
+- Targeted attacks on **high-degree** hubs are far more damaging.
+
+But degree is only one view of node importance.
+A stop with **high betweenness centrality** sits on many shortest paths and is just as critical - even if it has a modest degree.
+In this section we compare the two rankings to understand whether the same stops dominate both measures or whether each reveals a different set of vulnerable nodes.
+
+```{python}
+import sys
+
+sys.path.insert(0, "../01")
+
+from prague_dataset import PIDNetwork
+
+PID_data = PIDNetwork()
+PID = PID_data.graph
+PID_simple = nx.Graph(PID)
+
+print(f"Nodes: {PID_simple.number_of_nodes()}")
+print(f"Edges: {PID_simple.number_of_edges()}")
+```
+
+> **Task 24: Compute centralities**
+>
+> Compute **degree centrality** and **betweenness centrality** for every node in `PID_simple`.
+> Use `nx.betweenness_centrality` for betweenness (normalized).
+> Use the `degree_centrality` function you implemented earlier for degree centrality.
+
+```{python}
+# TODO: Compute degree centrality and betweenness centrality for all nodes in
+# PID_simple.
+PID_degree_centrality = {}
+PID_betweenness_centrality = {}
+```
+
+> **Task 25: Compare top-10 nodes by each measure**
+>
+> Sort nodes by degree centrality and by betweenness centrality separately.
+> Print the top  nodes for each measure showing stop name, degree centrality, and betweenness centrality.
+> Do the lists overlap? Are there stops that rank high in one measure but not the other?
+
+```{python}
+# TODO: Print the top 20 nodes by degree centrality.
+# For each node, show its stop name, degree centrality, and betweenness
+# centrality rank.
+N_TOP = 10
+```
+
+```{python}
+import osmnx as ox
+import contextily as cx
+
+PID.graph["crs"] = "EPSG:4326"
+PID_proj = ox.project_graph(PID, to_crs="EPSG:3857")
+fig, ax = plt.subplots(figsize=(15, 15))
+fig, ax = ox.plot_graph(
+    PID_proj,
+    ax=ax,
+    # Set node size and node collor based on betweenness centrality
+    node_size=[1000 * PID_betweenness_centrality[node] for node in PID_proj.nodes()],
+    node_color=[PID_betweenness_centrality[node] for node in PID_proj.nodes()],
+    edge_linewidth=2,
+    edge_alpha=0.7,
+    edge_color="#a0a0a0",
+    show=False,
+    bgcolor="none",
+)
+
+cx.add_basemap(ax, source=cx.providers.CartoDB.Positron)
+ax.set_axis_off()
+```
+
+> **Task 26: Rank correlation scatter plot**
+>
+> For the top `N_TOP` nodes by degree centrality, plot their degree-centrality rank (x-axis) against their betweenness-centrality rank (y-axis).
+> Annotate the five stops with the largest rank difference.
+> Does the plot suggest that degree and betweenness centrality identify the same critical stops in the PID network?
+
+```{python}
+# TODO: Scatter plot of degree rank vs betweenness rank for the top N_TOP nodes.
+# Annotate the five nodes with the largest absolute rank difference.
+
+# To annotate, you can use `ax.annotate()` function from Matplotlib.
+```

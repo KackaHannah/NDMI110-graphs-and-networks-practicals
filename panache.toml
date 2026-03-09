@@ -8,4 +8,4 @@ line-ending = "auto"
 wrap = "preserve"
 
 [formatters]
-python = ["black"]
+python = ["ruff"]
