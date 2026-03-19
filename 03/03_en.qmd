@@ -254,7 +254,7 @@ The nodes with the hightest betweenness are the ones whose removal from a networ
 >
 > Revisit the PID network from Tutorial 1 and identify the nodes with the highest betweenness centrality. Would targeted attacks on these nodes be more effective at disrupting network flow than attacks on nodes with high degree centrality?
 
-We can also define a global characteristic of a graph based on betweenness centrality, which is the sum of the betweenness centrality of all nodes in the graph. This is called global betweenness centrality and it can be used to measure how "centralized" a graph is in terms of its shortest paths.
+We can also define a global characteristic of a graph based on betweenness centrality, which is the average of the betweenness centrality of all nodes in the graph. This is called global betweenness centrality and it can be used to measure how "centralized" a graph is in terms of its shortest paths.
 
 **Definition (Global Betweenness Centrality)**
 
