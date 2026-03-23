@@ -1,0 +1,1080 @@
+---
+title: Random Networks, Small Worlds, and Scale-Free Structure
+jupyter: python3
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    number-sections: true
+---
+
+
+In this tutorial we revisit three concepts:
+
+- **Small-world effect**: typical distances are surprisingly short.
+- **Clustering**: real networks are very locally connected
+- **Scale-free property**: the shape of the degree distribution of many real networks is a power law.
+
+The central idea is to use the Erdos-Renyi random network as a *null model*. We use the random graph as a baseline and ask: what does the model predict, and where does it fail? 
+
+```{python}
+import math
+from pathlib import Path
+
+import matplotlib.figure
+import matplotlib.pyplot as plt
+import networkx as nx
+import numpy as np
+import panel as pn
+from scipy.stats import binom
+
+pn.extension(throttled=True)
+```
+
+## Helper functions
+
+```{python}
+def average_degree(G: nx.Graph) -> float:
+    return (2 * G.number_of_edges()) / G.number_of_nodes()
+
+def largest_connected_component(G: nx.Graph) -> nx.Graph:
+    if nx.is_connected(G):
+        return G
+    lcc_nodes = max(nx.connected_components(G), key=len)
+    #print(f"[WARN] Graph disconnected - using LCC with {len(lcc_nodes)} nodes.")
+    return G.subgraph(lcc_nodes).copy()
+```
+
+# Random network model
+
+## Definition
+
+> **Definition (Erdos-Renyi random graph)**
+> A random graph $G_{n,p}$ has $n$ nodes. Each of the $\binom{n}{2}$ possible edges is included independently with probability $p \in [0, 1]$.
+
+The random graph is our **null model**: a network built with no assumptions of structure. Comparing real networks against the null model helps us decide what is a real structural property and what can be explained by random chance.
+
+Two parameters: the number of nodes $n$ and the edge probability $p$.
+
+## Generating a random network
+
+> **Task 1**: Implement a random network generator
+>
+> Implement `random_network(n, p)` which constructs a $G_{n,p}$ graph.
+
+```{python}
+def random_network(n: int, p: float) -> nx.Graph:
+    G = nx.Graph()
+
+    # TODO: add nodes 0, 1, ..., n-1
+    # TODO: for each pair (i, j) with i < j, add the edge with probability p
+
+    return G
+```
+
+Run this cell multiple times to see different realizations from the same model.
+
+```{python}
+n = 30
+p = 0.12
+
+G = random_network(n, p)
+pos = nx.spring_layout(G, seed=0)
+
+plt.figure(figsize=(5, 5))
+nx.draw(G, pos=pos, node_size=50, with_labels=False, edge_color="#808080")
+plt.title(f"$G_{{n,p}}$,  $n={n}$,  $p={p:.2f}$")
+plt.show()
+```
+
+
+The panel below lets you explore how $n$ and $p$ affect the network structure.
+
+```{python}
+rand_n_net = pn.widgets.IntSlider(
+    name="Number of nodes n", start=10, end=50, step=1, value=30
+)
+rand_p_net = pn.widgets.FloatSlider(
+    name="Edge probability p", start=0.0, end=1.0, step=0.01, value=0.08
+)
+
+fig_net = matplotlib.figure.Figure(figsize=(5, 5))
+ax_net = fig_net.add_subplot(111)
+
+
+def draw_random_network(n: int, p: float):
+    G = random_network(n, p)
+    ax_net.clear()
+    nx.draw(
+        G,
+        pos=nx.circular_layout(G),
+        ax=ax_net,
+        node_size=30,
+        with_labels=False,
+        edge_color="#808080",
+    )
+    ax_net.set_title(f"$G_{{n,p}}$,  $n={n}$,  $p={p:.2f}$")
+    ax_net.set_axis_off()
+    return pn.pane.Matplotlib(fig_net)
+
+
+pn.Column(
+    rand_n_net,
+    rand_p_net,
+    pn.bind(
+        draw_random_network,
+        n=rand_n_net.param.value_throttled,
+        p=rand_p_net.param.value_throttled,
+    ),
+)
+```
+
+## Properties of random networks
+
+### Average degree
+
+The **average degree** $\langle k \rangle$ is the average number of connections per node.
+
+For $G_{n,p}$, each of the $n-1$ potential neighbors of a node is included independently with probability $p$. Hence, the expected degree of a node is
+
+$$
+\langle k \rangle = (n - 1) \cdot p
+$$
+
+Let's verify this by simulation.
+
+> **Task 2**: Simulate and compare average degree
+>
+> Implement `compare_average_degree(n, p, n_rep)` which estimates the mean observed $\langle k \rangle$ over `n_rep` random graphs and compares it to the prediction $(n-1)p$`.
+
+```{python}
+def compare_average_degree(n: int, p: float, n_rep: int = 50) -> tuple[float, float]:
+    # TODO: simulate n_rep random graphs and compute average_degree for each
+    # TODO: return (mean of observed values, analytical prediction (n-1)*p)
+    return 0.0, 0.0
+```
+
+
+### Degree distribution
+
+How are degrees distributed across nodes? Each node independently decides whether to connect to each of the other $n-1$ nodes, so its degrees follow a **Binomial distribution**:
+
+$$
+P(k) = \binom{n-1}{k} p^k (1-p)^{n-1-k}
+$$
+
+> **Task 3**: Simulate the degree distribution
+>
+> Implement `estimate_random_degree_distribution(n, p, n_rep)` which samples `n_rep` random graphs. Collect the degree distribution for all runs and compute an empirical probability distribution (normalized histogram) of node degrees by averaging over all runs and normalizing.
+
+```{python}
+def estimate_random_degree_distribution(
+    n: int, p: float, n_rep: int = 50
+) -> list:
+    # TODO: simulate n_rep random graphs
+
+    # TODO: collect all node degrees across all runs
+
+    # TODO: compute and return empirical probability distribution (normalized histogram)
+
+    return [0] * n
+```
+
+
+**Poisson approximation.** For large $n$ and small $p$ with $\lambda = (n-1)p$ held fixed (sparse graphs), the Binomial distribution converges to a Poisson distribution:
+
+$$
+P(k) \approx \frac{\lambda^k e^{-\lambda}}{k!}
+$$
+
+The important implication here is the entire degree distribution is controlled by a **single parameter** -- the average degree $\lambda = \langle k \rangle$. 
+
+The panel below lets you verify how well the Poisson approximates the true distribution for different values of $n$ and $p$.
+
+```{python}
+rand_n_dd = pn.widgets.IntSlider(
+    name="Number of nodes n", start=10, end=100, step=5, value=60
+)
+rand_p_dd = pn.widgets.FloatSlider(
+    name="Edge probability p", start=0.0, end=1, step=0.01, value=0.08
+)
+
+fig_dd = matplotlib.figure.Figure(figsize=(6, 4))
+ax_dd = fig_dd.add_subplot(111)
+
+
+def draw_degree_distribution(n: int, p: float):
+    k_sim, p_sim = estimate_random_degree_distribution(n, p, n_rep=100)
+    k_theory = np.arange(0, n)
+    p_binomial = binom.pmf(k_theory, n - 1, p)
+    lam = (n - 1) * p
+    p_poisson = (lam ** k_theory) * np.exp(-lam) / np.array(
+        [math.factorial(k) for k in k_theory]
+    )
+
+    ax_dd.clear()
+    ax_dd.bar(k_sim, p_sim, color="steelblue", edgecolor="white", label="Simulated")
+    ax_dd.plot(k_theory, p_binomial, "r--", label="Binomial PMF")
+    ax_dd.plot(k_theory, p_poisson, "g--", label="Poisson PMF")
+    ax_dd.set_xlim(0, n)
+    ax_dd.set_xlabel("Degree $k$")
+    ax_dd.set_ylabel("$P(k)$")
+    ax_dd.set_title(
+        f"$G_{{n,p}}$,  $n={n}$,  $p={p:.2f}$,  $\\lambda={lam:.1f}$"
+    )
+    ax_dd.legend()
+    return pn.pane.Matplotlib(fig_dd)
+
+
+pn.Column(
+    rand_n_dd,
+    rand_p_dd,
+    pn.bind(
+        draw_degree_distribution,
+        n=rand_n_dd.param.value_throttled,
+        p=rand_p_dd.param.value_throttled,
+    ),
+)
+```
+
+> **Task 4**: For what values of $n$ and $p$ does the Poisson approximation break down? What happens for large $p$?
+
+```{python}
+# TODO
+```
+
+# Real-world networks
+
+To understand where the random model fails, we need real data. We load a small selection of networks that are manageable enough for us to work with.
+
+
+| Dataset Name | Dataset Description | Original Source |
+| :--- | :--- | :--- |
+| `air` | Network of the airline traffic between cities in the United States. | http://vlado.fmf.uni-lj.si/pub/networks/data/mix/USAir97.net |
+| `celegansneural` | Biological network representing the neural system of C. Elegans. | http://www-personal.umich.edu/~mejn/netdata/celegansneural.zip |
+| `glossary` | Linguistic network of terms regarding graphs and digraphs, where terms are linked if one is used to explain the other. | http://vlado.fmf.uni-lj.si/pub/networks/data/DIC/TG/glossTG.htm |
+| `lesmis` | Social network of characters from the novel Les Miserables. | http://www-personal.umich.edu/~mejn/netdata/lesmis.zip |
+| `metabolic` | Network representing the metabolic reactions of the E. coli bacteria, where nodes are metabolites connected by reaction inputs and products. | http://bigg.ucsd.edu/ |
+| `netscience` | Collaboration network of network scientists. | http://www-personal.umich.edu/~mejn/netdata/netscience.zip |
+| `power` | Network representing the topology of the power grid in the western part of the United States. | http://www-personal.umich.edu/~mejn/netdata/power.zip |
+| `protein` | Network representing protein-protein interactions in yeast, where nodes are proteins connected by physical interactions within the cell. | http://interactome.dfci.harvard.edu/S_cerevisiae/index.php?page=download |
+
+
+
+> **Task 5**: Download and load real world networks
+>
+> [**DOWNLOAD LINK**](https://filr.cs.cas.cz/filr/public-link/file-download/2c9681489d0b0d13019d19d76db735a8/813/5174898157119645433/networks.zip)
+
+```{python}
+networks_path = Path("./networks")
+
+def load_networks() -> dict[str, nx.Graph]:
+
+    # TODO: return a dictionary mapping network names to loaded graphs, 
+
+    return {}
+```
+
+```{python}
+networks = load_networks()
+```
+
+
+> **Task 6**: Load the selected networks and print a summary table with their basic properties (number of nodes, edges, average degree).
+
+Note: you can just select a few of the networks for the rest of the tutorial if you want to speed up the computations.
+
+To compare real networks to the random model, we generate a random graph with the same number of nodes and edges. We then compare the properties of the real network to the properties of the matched random graph.
+
+> **Task 7**: Implement `matching_random_network(G)` which computes the matched $p$ and returns a random graph with (approximately) the same $n$ and $m$ as $G$. Do this by appropriately setting $p$ in `random_network(n, p)`.
+>
+> Hint: the probability $p$ can be interpreted as the fraction of possible edges that are actually present in the graph.
+
+```{python}
+def matching_random_network(G: nx.Graph) -> nx.Graph:
+
+    # TODO
+
+    return nx.Graph()
+```
+
+The plot below compares the degree distribution of each real network to that of a matched random network. The top row shows the graph structure, and the bottom row shows the degree distribution on linear and log-log scales.
+
+```{python}
+def _degree_distribution(degrees: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Exact P(k) for all positive degrees with nonzero count."""
+    k, counts = np.unique(degrees, return_counts=True)
+    mask = k > 0
+    k, counts = k[mask], counts[mask]
+    return k, counts / counts.sum()
+
+
+def _draw_network(G: nx.Graph, ax: plt.Axes, title: str) -> None:
+    nx.draw(
+        G,
+        pos=nx.spring_layout(G, seed=0),
+        ax=ax,
+        node_size=12,
+        with_labels=False,
+        edge_color="#808080",
+    )
+    ax.set_title(title)
+
+
+_BAR_WIDTH = 0.35
+
+def plot_real_vs_random(G_real: nx.Graph, name: str) -> None:
+    G_real = nx.Graph(G_real)
+    G_rand = matching_random_network(G_real)
+
+    n, m = G_real.number_of_nodes(), G_real.number_of_edges()
+    p_matched = 2 * m / (n * (n - 1))
+
+    k_real, p_real = _degree_distribution(np.array([d for _, d in G_real.degree()]))
+    k_rand, p_rand = _degree_distribution(np.array([d for _, d in G_rand.degree()]))
+
+    fig = plt.figure(figsize=(13, 10))
+    gs  = fig.add_gridspec(2, 2, hspace=0.35, wspace=0.3)
+
+    ax_real = fig.add_subplot(gs[0, 0])
+    ax_rand = fig.add_subplot(gs[0, 1])
+    ax_hist = fig.add_subplot(gs[1, :])       # spans both columns
+
+    _draw_network(G_real, ax_real, f"{name}  (N={n}, L={m})")
+    _draw_network(G_rand, ax_rand, f"Matched random  ($p={p_matched:.5f}$)")
+
+    bars_real = ax_hist.bar(k_real - _BAR_WIDTH / 2, p_real, width=_BAR_WIDTH, alpha=0.8, label="Real")
+    bars_rand = ax_hist.bar(k_rand + _BAR_WIDTH / 2, p_rand, width=_BAR_WIDTH, alpha=0.8, label="Random")
+    ax_hist.axvline(k_real.max(), color=bars_real.patches[0].get_facecolor(), linestyle="--", linewidth=1, label=f"$k_{{max}}$ real = {k_real.max()}")
+    ax_hist.axvline(k_rand.max(), color=bars_rand.patches[0].get_facecolor(), linestyle=":",  linewidth=1, label=f"$k_{{max}}$ random = {k_rand.max()}")
+    ax_hist.set(xlabel="Degree $k$", ylabel="$P(k)$", title="Degree distribution")
+    ax_hist.legend()
+
+    fig.suptitle(f"{name}: real vs matched random", fontsize=13)
+    plt.show()
+
+
+for name, G in networks.items():
+    plot_real_vs_random(G, name)
+```
+
+# Small-world effect
+
+## Definition
+
+The **average shortest path length** $\langle d \rangle$ is the mean distance between all pairs of nodes:
+
+$$
+\langle d \rangle = \frac{1}{N(N-1)} \sum_{i \neq j} d(i, j)
+$$
+
+A network exhibits the **small-world effect** if $\langle d \rangle$ is small. Even very large real networks seem to be traversable in surprisingly few steps. The phrase "six degrees of separation" also refers to this phenomenon.
+
+## Simulating shortest paths in a random network
+
+Computing *all* pairwise shortest paths can take a long time for large networks. 
+
+For large graphs, we try to estimate the distribution of shortest-paths by sampling: repeatedly choose two random nodes and compute one shortest path length.
+
+Using this procedure we can try to build an estimate of the shortest path distribution in a network.
+
+> **Task 8**: Estimate the shortest path distribution in a random network
+>
+> Implement `estimate_path_lengths(G, n_samples)` which samples `n_samples` pairs of nodes from the largest connected component of `G` and computes the shortest path length for each pair. Return a list of sampled path lengths.
+
+```{python}
+def estimate_path_lengths(
+    G: nx.Graph,
+    n_samples: int = 5_000,
+) -> list[int]:
+    # TODO: reduce to LCC
+    # TODO: sample node pairs and call nx.shortest_path_length
+    return []
+```
+
+The plot below shows the distribution of sampled path lengths in a random network. The mean of the distribution is an estimate of the average shortest path length $\langle d \rangle$.
+
+```{python}
+def plot_path_length_distribution(
+    lengths: np.ndarray,
+    title: str = "",
+) -> None:
+    mean = float(np.mean(lengths))
+    fig, ax = plt.subplots(figsize=(8, 4.5))
+    bars = ax.hist(
+        lengths,
+        bins=range(1, max(lengths) + 2),
+        density=True,
+        alpha=0.75,
+        edgecolor="white",
+        align="left",
+    )
+    ax.axvline(
+        mean,
+        linewidth=2,
+        linestyle="--",
+        label=f"Mean = {mean:.2f}",
+    )
+    ax.set(
+        xlabel="Shortest path length",
+        ylabel="Fraction of pairs",
+        title=title or "Shortest path length distribution",
+    )
+    ax.legend()
+    plt.tight_layout()
+    plt.show()
+
+
+G_demo = random_network(150, 0.04)
+lengths_demo = estimate_path_lengths(G_demo, n_samples=5_000)
+plot_path_length_distribution(lengths_demo, title="Estimated path lengths in a random network")
+```
+
+
+> **Task 9**: Compare the estimated average shortest path length to the exact value from `nx.average_shortest_path_length` for the same graph. Do they match?
+
+```{python}
+# TODO: Compare estimated and exact average shortest path lengths
+```
+
+
+## How does average shortest path scale with N?
+
+To test the logarithmic scaling law cleanly, we should keep the average degree approximately constant as $N$ grows. If we fixed $p$, then $\langle k \rangle = (n-1)p$ would increase with $n$, and the comparison would mix two effects at once.
+
+So we set a target average degree $k_0$ and choose
+
+$$
+p_n = \frac{k_0}{n-1}
+$$
+
+for each network size $n$.
+
+> **Task 10**: Simulate $\langle d \rangle$ as a function of $N$
+>
+> Implement `simulate_avg_path_vs_n(n_values, k_target, n_rep, n_samples, method)` which returns a sampled estimate of mean path length for each value in `n_values`.
+>
+> For each $n$:
+>
+> 1. Set $p_n = k_{\text{target}}/(n-1)$.
+> 2. Generate `n_rep` random networks.
+> 3. Estimate path lengths on the LCC using `estimate_path_lengths`.
+> 4. Average the sampled means.
+>
+> Plot the result. What kind of growth do you observe?
+
+```{python}
+def simulate_avg_path_vs_n(
+    n_values: list[int],
+    k_target: float = 8.0,
+    n_rep: int = 10,
+    n_samples: int = 2_000,
+) -> list[float]:
+    # TODO: for each n, set p_n = k_target / (n - 1)
+    # TODO: run n_rep random networks with random_network(n, p_n)
+    # TODO: estimate lengths using estimate_path_lengths(..., n_samples, method)
+    # TODO: take the mean of sampled lengths for each run
+    # TODO: return array of per-n means
+    return [0] * len(n_values)
+```
+
+```{python}
+k_target = 12
+```
+
+```{python}
+n_values = list(np.logspace(1, 3, num=10, dtype=int))
+estimated_L = simulate_avg_path_vs_n(
+    n_values,
+    k_target=k_target,
+    n_rep=10,
+    n_samples=2_000,
+)
+
+plt.figure(figsize=(8, 5))
+plt.plot(n_values, estimated_L, "o-", label="Estimated $\\langle d \\rangle$")
+plt.xlabel("$N$")
+plt.ylabel("Average shortest path $\\langle d \\rangle$")
+plt.title(f"Average shortest path vs $N$  ($k_0={k_target}$)")
+plt.legend()
+plt.tight_layout()
+plt.show()
+```
+
+## Analytical derivation
+
+For a random network with average degree $\langle k \rangle$, let's now assume that the graph looks like a tree locally. Starting from a node, we can reach:
+
+- About $\langle k \rangle$ nodes at distance $d=1$.
+- About $\langle k \rangle^2$ nodes at distance $d=2$.
+- About $\langle k \rangle^3$ nodes at distance $d=3$.
+- In general, about $\langle k \rangle^d$ nodes at distance $d$.
+
+So the cumulative number of nodes reachable within distance $d$ is approximately:
+
+$$
+N(d) \approx 1 + \langle k \rangle + \langle k \rangle^2 + \cdots + \langle k \rangle^d
+= \frac{\langle k \rangle^{d+1} - 1}{\langle k \rangle - 1}
+$$
+
+The maximum relevant distance is reached when this covers the network size $N$:
+
+$$
+N(d_{\max}) \approx N
+$$
+
+For $\langle k \rangle \gg 1$, dropping lower-order terms yields:
+
+$$
+\langle k \rangle^{d_{\max}} \approx N
+$$
+
+and therefore
+
+$$
+d_{\max} \approx \frac{\ln N}{\ln \langle k \rangle}
+$$
+
+In practice, this logarithmic expression is often a better approximation for the **average** distance than for the strict diameter, so we use
+
+$$
+\langle d \rangle \approx \frac{\ln N}{\ln \langle k \rangle}
+$$
+
+The cell below implements this formula to compute the expected average shortest path length in a random graph.
+
+```{python}
+def expected_random_path_length(G: nx.Graph) -> float:
+    n = G.number_of_nodes()
+    m = G.number_of_edges()
+    if n <= 2:
+        return float("nan")
+    p = (2 * m) / (n * (n - 1))
+    k_avg = (n - 1) * p
+    if k_avg <= 1:
+        return float("nan")
+    return np.log(n) / np.log(k_avg)
+```
+
+The following plot compares the simulated average shortest path length to the theoretical prediction for a range of $N$ values. Do they match?
+
+```{python}
+def plot_path_scaling_with_theory(
+    n_values: list[int], estimated_L: list, k_target: float
+) -> None:
+    if k_target <= 1:
+        analytical_L = np.full(len(n_values), np.nan)
+    else:
+        analytical_L = np.array([np.log(n) / np.log(k_target) for n in n_values])
+
+    plt.figure(figsize=(8, 5))
+    plt.plot(n_values, estimated_L, "o-", label="Estimated $\\langle d \\rangle$")
+    plt.plot(
+        n_values, analytical_L, "r--",
+        label="Theory: $\\ln N / \\ln k_0$" + f"($k_0={k_target:g}$)"
+    )
+    plt.xlabel("$N$")
+    plt.ylabel("Average shortest path $\\langle d \\rangle$")
+    plt.title(f"Average shortest path vs $N$  ($k_0={k_target}$)")
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+
+plot_path_scaling_with_theory(n_values, estimated_L, k_target)
+```
+
+
+## Real networks vs random expectation
+
+
+> **Task 11**: Compare average shortest path in real networks to the random model prediction
+>
+> Implement `compare_path_lengths(networks, n_samples, method)` which prints a table with, for each network: the sampled estimate of $\langle d \rangle$, the analytical estimate $\ln N / \ln \langle k \rangle$, and their ratio.
+>
+> Use either estimated path lengths from sampling or the exact average shortest path length from `nx.average_shortest_path_length` (which is feasible for these small networks). The random expectation can be computed using `expected_random_path_length(G)`.
+>
+> Do real networks satisfy the small-world prediction? Does the ratio suggest the random model over- or under-estimates $\langle d \rangle$?
+
+```{python}
+def compare_path_lengths(
+    networks: dict[str, nx.Graph],
+    n_samples: int = 3_000,
+) -> None:
+    # TODO: for each network:
+    #   - reduce to LCC
+    #   - compute sampled lengths with estimate_path_lengths(...)
+    #   - compute d_est = mean(sampled lengths)
+    #   - compute d_rand = expected_random_path_length(G_lcc)
+    # TODO: print a formatted table with columns: Network, N, <d> est, <d> random, ratio
+    pass
+```
+
+# Clustering coefficient
+
+## Definition
+
+The degree of a node tells us how many neighbors it has, but not whether those neighbors are connected to each other. The **local clustering coefficient** $C_i$ measures the link density inside node $i$'s immediate neighborhood:
+
+- $C_i = 0$: no links among neighbors of $i$.
+- $C_i = 1$: every neighbor of $i$ is linked to every other neighbor.
+
+For node $i$ with degree $k_i$, the definition is
+
+$$
+C_i = \frac{\text{number of edges among neighbors of } i}{\binom{k_i}{2}}
+$$
+
+To compute the expected clustering in a random network, let $L_i$ be the number of links among the $k_i$ neighbors of node $i$. There are $k_i(k_i-1)/2$ possible neighbor-neighbor links, and each exists with probability $p$, so
+
+$$
+\langle L_i \rangle = p\,\frac{k_i(k_i-1)}{2}
+$$
+
+Hence,
+
+$$
+C_i = \frac{2\langle L_i \rangle}{k_i(k_i-1)} = p
+$$
+
+Using $\langle k \rangle = (N-1)p \approx Np$ for large $N$:
+
+$$
+C_{\text{random}} \approx p \approx \frac{\langle k \rangle}{N}
+$$
+
+The **average clustering coefficient** is $\langle C \rangle = \frac{1}{N} \sum_i C_i$.
+
+This gives two predictions:
+
+1. For fixed $\langle k \rangle$, clustering decreases as $1/N$.
+2. Clustering is independent of node degree in the random model.
+
+The next tasks test both predictions against data.
+
+> **Task 12**: Simulate the clustering coefficient for random networks
+>
+> Implement `simulate_clustering_rnm(n, p, n_rep)` which returns `(mean, std)` of the average clustering coefficient over `n_rep` runs.
+>
+> Run it for a few `(n, p)` pairs and verify the simulated mean matches $p$.
+
+```{python}
+def simulate_clustering_rnm(n: int, p: float, n_rep: int = 50) -> float:
+    # TODO: run n_rep random networks with random_network(n, p)
+    # TODO: compute nx.average_clustering for each
+    # TODO: return mean
+    return 0.0
+```
+
+The match should be tight for random graphs. This verifies the baseline formula before comparing to real networks.
+
+## Clustering by degree class
+
+Now test prediction (2): in random networks, clustering should be independent of degree.
+
+> **Task 13**: Compute and plot $C(k)$ -- clustering by degree class
+>
+> Implement `average_clustering_by_degree(G)` which groups nodes by degree and returns the mean local clustering coefficient for each degree class as `(k_values, C_k)`.
+>
+> Apply to the real networks. Does clustering depend on degree?
+
+```{python}
+def average_clustering_by_degree(G: nx.Graph) -> tuple[list, list]:
+    # TODO: group nodes by degree k
+    # TODO: for each k, compute mean of nx.clustering over all nodes with that degree
+    # TODO: return (k_values, C_k) sorted by k
+    return [], []
+```
+
+The plot below shows $C(k)$ for each real network, along with the random expectation as a horizontal line.
+
+```{python}
+def plot_c_of_k(G: nx.Graph, name: str) -> None:
+    k_values, C_k = average_clustering_by_degree(G)
+    p = (2 * G.number_of_edges()) / (G.number_of_nodes() * (G.number_of_nodes() - 1))
+
+    plt.figure(figsize=(7, 4.5))
+    mask = k_values > 0
+    plt.loglog(k_values[mask], C_k[mask], "o", label="Empirical $C(k)$")
+    plt.axhline(
+        p, color="red", linestyle="--",
+        label=f"Random expectation $C \\approx p = {p:.5f}$"
+    )
+    plt.xlabel("Degree $k$")
+    plt.ylabel("Average clustering $C(k)$")
+    plt.title(f"{name}: clustering by degree class")
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+
+for name, G in networks.items():
+    plot_c_of_k(nx.Graph(G), name)
+```
+
+> **Task 14**: What do you observe? Does clustering depend on degree in real networks? How does this compare to the random baseline?
+
+```{python}
+# TODO
+```
+
+## Network-level clustering vs size
+
+This directly tests prediction (1): if the random model held, points should follow the $1/N$ line.
+
+```{python}
+def plot_c_over_k_vs_n(networks: dict[str, nx.Graph]) -> None:
+    plt.figure(figsize=(7, 5))
+    for name, G in networks.items():
+        C = nx.average_clustering(G)
+        k = average_degree(G)
+        N = G.number_of_nodes()
+        plt.scatter(N, C / k, s=70, zorder=3, label=name)
+
+    N_grid = np.logspace(1, 6, 200)
+    plt.plot(
+        N_grid, 1 / N_grid, "k--",
+        label="Random: $C/\\langle k\\rangle \\sim 1/N$"
+    )
+    plt.xscale("log")
+    plt.yscale("log")
+    plt.xlabel("$N$")
+    plt.ylabel("$C / \\langle k \\rangle$")
+    plt.title("$C / \\langle k \\rangle$ vs $N$: real networks vs random baseline")
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+
+plot_c_over_k_vs_n(networks)
+```
+
+> **Task 15**: What do you observe? Do real networks follow the $1/N$ scaling? How do they compare to the random baseline?
+
+```{python}
+# TODO: What do you observe? Do real networks follow the $1/N$ scaling? How do they compare to the random baseline?
+```
+
+## Comparing clustering: real networks vs random model
+
+> **Task 16**: Tabulate real vs random clustering for all networks
+>
+> Implement `compare_clustering(networks, n_rep)` which prints, for each network: the real $C$, the simulated random-model $C_{\text{rand}}$ (on a matched $G_{n,p}$), and the ratio $C / C_{\text{rand}}$.
+>
+> How large are the ratios? What does this say about the random model as a descriptor of real networks?
+
+```{python}
+def compare_clustering(networks: dict[str, nx.Graph], n_rep: int = 5) -> None:
+    # TODO: for each network:
+    #   - compute C_real = nx.average_clustering(G)
+    #   - compute matched p, then C_rand, std_rand = simulate_clustering_rnm(n, p, n_rep)
+    # TODO: print a table with columns: Network, N, C real, C rand, ratio
+    pass
+```
+
+> **Task 17**: What do you observe? How much more clustered are real networks compared to the random model? What does this say about the random model as a descriptor of real networks?
+
+```{python}
+# TODO: What do you observe? How much more clustered are real networks compared to the random model? What does this say about the random model as a descriptor of real networks?
+```
+
+
+# Watts-Strogatz model
+
+The random model predicts the small-world effect correctly but dramatically underestimates clustering. Is there a model that captures both short paths and high clustering?
+
+The **Watts-Strogatz model** does this by interpolating between a regular lattice (high clustering, long paths) and a random graph (low clustering, short paths).
+
+The key observation: a small number of random "shortcuts" in a regular structure is enough to collapse path lengths while barely touching clustering.
+
+## Ring lattice
+
+The starting structure is a **ring lattice**: $n$ nodes arranged in a circle, each connected to its $k$ nearest neighbors ($k$ must be even).
+
+> **Task 18**: Implement a ring lattice generator
+>
+> Implement `ring_lattice(n, k)` where each node $i$ is connected to nodes $i \pm 1, \ldots, i \pm k/2$ (all indices modulo $n$).
+
+```{python}
+def ring_lattice(n: int, k: int) -> nx.Graph:
+    """Ring lattice with n nodes, each connected to k nearest neighbors. k must be even."""
+    G = nx.Graph()
+
+    # TODO: add nodes 0, 1, ..., n-1
+    # TODO: Connect each node to k/2 neighbors on each side, using modulo arithmetic to wrap around the circle
+
+    return G
+```
+
+## Watts-Strogatz model definition
+
+Starting from a ring lattice, the WS model **rewires** each edge independently with probability $p$:
+
+- $p = 0$: pure ring lattice - high $C$, large $\langle d \rangle$.
+- Small $p$: a handful of random shortcuts collapse $\langle d \rangle$ while $C$ stays high.
+- $p \to 1$: approaches a random graph - low $C$, small $\langle d \rangle$.
+
+## Interactive visualization: WS vs RNM
+
+The panel below shows a WS graph alongside a matched random network (same $N$, same number of edges). Observe how the visual structure differs as you change $p$.
+
+```{python}
+ws_n_vis = pn.widgets.IntSlider(name="n", start=20, end=100, step=2, value=40)
+ws_k_vis = pn.widgets.IntSlider(name="k (even)", start=2, end=20, step=2, value=4)
+ws_p_vis = pn.widgets.FloatSlider(name="p (rewiring)", start=0.0, end=1.0, step=0.02, value=0.1)
+
+fig_ws_vis = matplotlib.figure.Figure(figsize=(11, 5))
+axes_ws_vis = [
+    fig_ws_vis.add_subplot(1, 2, 1),
+    fig_ws_vis.add_subplot(1, 2, 2),
+]
+
+
+def draw_ws_vs_rnm(n: int, k: int, p: float):
+    if k >= n:
+        return pn.pane.Markdown("`k` must be smaller than `n`.")
+    G_ws = nx.watts_strogatz_graph(n=n, k=k, p=p)
+    m_ws = G_ws.number_of_edges()
+    p_rand = (2 * m_ws) / (n * (n - 1))
+    G_rand = random_network(n, p_rand)
+
+    for ax in axes_ws_vis:
+        ax.clear()
+
+    nx.draw(
+        G_ws,
+        pos=nx.circular_layout(G_ws),
+        ax=axes_ws_vis[0],
+        node_size=30,
+        with_labels=False,
+        edge_color="#808080",
+    )
+    axes_ws_vis[0].set_title(f"WS  ($n={n}$, $k={k}$, $p={p:.2f}$)")
+
+    nx.draw(
+        G_rand,
+        pos=nx.circular_layout(G_rand),
+        ax=axes_ws_vis[1],
+        node_size=30,
+        with_labels=False,
+        edge_color="#808080",
+    )
+    axes_ws_vis[1].set_title(f"Matched RNM  ($p={p_rand:.3f}$)")
+
+    return pn.pane.Matplotlib(fig_ws_vis)
+
+
+pn.Column(
+    pn.Row(ws_n_vis, ws_k_vis),
+    ws_p_vis,
+    pn.bind(
+        draw_ws_vs_rnm,
+        n=ws_n_vis.param.value_throttled,
+        k=ws_k_vis.param.value_throttled,
+        p=ws_p_vis.param.value_throttled,
+    ),
+)
+```
+
+## Interpolation from lattice to random
+
+The visualization below shows clustering and path length as a function of $p$, each normalized by its value at $p = 0$ (the ring lattice).
+
+```{python}
+n_ws = 500
+k_ws = 20
+p_grid = np.logspace(-4, 0, 20)
+n_rep = 6
+
+fig_ws_interp, ax_ratio = plt.subplots(figsize=(10, 5.5))
+
+
+def estimate_ws_ratios(n: int, k: int, p_values: np.ndarray, n_rep: int):
+    G0 = nx.watts_strogatz_graph(n=n, k=k, p=0.0, seed=0)
+    C0 = nx.average_clustering(G0)
+    d0 = nx.average_shortest_path_length(G0)
+
+    c_ratio = []
+    d_ratio = []
+    for p_i in p_values:
+        c_vals = []
+        d_vals = []
+        for rep in range(n_rep):
+            Gi = nx.watts_strogatz_graph(n=n, k=k, p=float(p_i), seed=rep)
+            Gi_lcc = largest_connected_component(Gi)
+            c_vals.append(nx.average_clustering(Gi_lcc))
+            d_vals.append(nx.average_shortest_path_length(Gi_lcc))
+        c_ratio.append(float(np.mean(c_vals)) / C0)
+        d_ratio.append(float(np.mean(d_vals)) / d0)
+
+    return np.array(c_ratio), np.array(d_ratio)
+
+c_ratio, d_ratio = estimate_ws_ratios(n_ws, k_ws, p_grid, n_rep=n_rep)
+ax_ratio.plot(
+    p_grid,
+    c_ratio,
+    "o-",
+    color="tab:blue",
+    markersize=4,
+    label=r"$\langle C(p) \rangle / \langle C(0) \rangle$",
+)
+ax_ratio.plot(
+    p_grid,
+    d_ratio,
+    "o-",
+    color="tab:orange",
+    markersize=4,
+    label=r"$\langle d(p) \rangle / \langle d(0) \rangle$",
+)
+ax_ratio.set_xscale("log")
+ax_ratio.set_xlabel("$p$ (log scale)")
+ax_ratio.set_ylabel("Normalized value")
+ax_ratio.set_title(
+    f"Interpolation from ring lattice to random network ($n={n_ws}$, $k={k_ws}$)"
+)
+ax_ratio.grid(alpha=0.25)
+ax_ratio.legend()
+
+plt.tight_layout()
+plt.show()
+```
+
+Notice the key pattern: at small $p$, path length collapses rapidly while clustering barely moves. This small-$p$ regime is the "small-world" zone where the model simultaneously achieves short paths and high clustering.
+
+# Scale-free property
+
+## Power law
+
+A discrete random variable $K$ follows a **power law** if:
+
+$$
+P(K = k) \propto k^{-\alpha}, \quad k \geq k_{\min}
+$$
+
+for some exponent $\alpha > 1$. On a log-log plot, a power law appears as a straight line with slope $-\alpha$.
+
+Power laws have **heavy tails**: the probability of observing very large values decays slowly. This means high-degree nodes (hubs) are more likely than a Gaussian or Poisson distribution would predict.
+
+In empirical data, degree distributions rarely follow this form over the entire range of $k$. A common pattern is:
+
+- The **tail** (large $k$) is approximately power-law.
+- The **small-$k$ regime** deviates from a true power law.
+- In some networks, the **high-$k$ tail** also deviates due to a finite-size or cut-off that limits the maximum observable degree.
+
+So when we say a network has a "power-law degree distribution," we usually mean that the tail is consistent with a power-law pattern, not necessarily every value of $k$.
+
+## Scale-free networks
+
+A network is called **scale-free** if its degree distribution follows a power law. 
+
+Neither $G_{n,p}$ nor the Watts-Strogatz model produce power-law degree distributions. Many empirically observed networks -- the web, protein interaction networks, citation networks -- are observed to have heavy-tailed, approximately power-law degree distributions.
+
+## Comparing degree distributions
+
+> **Task 19**: Visualize degree distributions of ER, WS, and real networks
+>
+> Implement `plot_degree_dist_all(networks, n, p_er, k_ws, p_ws)` (or just plot in separate cells) which generates an ER graph and a WS graph (both with `n` nodes), assembles them with the real networks, and plots the log-log degree distribution for each side by side.
+>
+> Which distributions look like straight lines on log-log axes (consistent with a power law)? Which do not?
+
+```{python}
+def plot_degree_dist_all(
+    networks: dict[str, nx.Graph],
+    n: int = 500,
+    p_er: float = 0.02,
+    k_ws: int = 6,
+    p_ws: float = 0.1,
+) -> None:
+    # TODO: build G_er = random_network(n, p_er) and G_ws = ws_graph(n, k_ws, p_ws)
+    # TODO: assemble all_graphs = [("ER random", G_er), ("Watts-Strogatz", G_ws)] + list(networks.items())
+    # TODO: create one subplot per graph and plot log-log degree distribution in each
+    pass
+```
+
+## Beware of linear binning
+
+How you plot a degree distribution changes what you see. The same data presented four different ways:
+
+1. **Linear histogram** -- intuitive, but compresses the tail heavily.
+2. **Log-log with linear bins** -- reveals broad tails, but empty high-degree bins create artificial gaps and noise.
+3. **Log-log with log-bins** -- stabilizes tail fluctuations; the apparent slope is sensitive to bin width.
+4. **CCDF on log-log** -- it turns out that the cummulative distribution $P(K \geq k)$ is also a power law, however with exponent $\alpha - 1$ instead of $\alpha$. This is a common way to visualize heavy tails without binning artifacts.
+
+The showcase below applies all four to the first loaded network.
+
+```{python}
+def _linear_degree_distribution(degrees: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Exact P(k) from degree counts, excluding k=0 and empty bins."""
+    hist = np.bincount(degrees).astype(float)
+    k = np.arange(len(hist))
+    mask = (k > 0) & (hist > 0)
+    return k[mask], hist[mask] / hist.sum()
+
+
+def _log_binned_degree_distribution(
+    degrees: np.ndarray, n_bins: int = 10
+) -> tuple[np.ndarray, np.ndarray]:
+    bins = np.logspace(np.log10(max(1, degrees.min())), np.log10(degrees.max()), n_bins + 1)
+    counts, edges = np.histogram(degrees, bins=bins)
+    widths = edges[1:] - edges[:-1]
+    mask = counts > 0
+    k_centers = ((edges[:-1] + edges[1:]) / 2)[mask]
+    density = counts[mask] / (counts.sum() * widths[mask])
+    return k_centers, density
+
+
+def _ccdf(degrees: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """P(K >= k) for all unique positive degrees, via searchsorted (O(n log n))."""
+    sorted_d = np.sort(degrees)
+    unique_k = np.unique(degrees[degrees > 0])
+    idx = np.searchsorted(sorted_d, unique_k, side="left")
+    return unique_k, (len(degrees) - idx) / len(degrees)
+
+
+def plot_degree_visualizations(G: nx.Graph, name: str, n_log_bins: int = 12) -> None:
+    degrees = np.array([d for _, d in G.degree()])
+
+    k_lin, p_lin   = _linear_degree_distribution(degrees)
+    k_log, p_log   = _log_binned_degree_distribution(degrees, n_bins=n_log_bins)
+    k_ccdf, p_ccdf = _ccdf(degrees)
+
+    fig, axes = plt.subplots(2, 2, figsize=(12, 9))
+
+    axes[0, 0].hist(degrees, bins=30, color="steelblue", edgecolor="white")
+    axes[0, 0].set(title="Linear scale, linear bins", xlabel="Degree $k$", ylabel="Count")
+
+    axes[0, 1].loglog(k_lin, p_lin, "o")
+    axes[0, 1].set(title="Log-log, linear binning", xlabel="$k$", ylabel="$P(k)$")
+
+    axes[1, 0].loglog(k_lin, p_lin, "o", color="steelblue", alpha=0.2, ms=4, label="linear bins")
+    axes[1, 0].loglog(k_log, p_log, "o-", color="steelblue", label="log bins")
+    axes[1, 0].set(title="Log-log, log-binning", xlabel="$k$", ylabel="$P(k)$")
+    axes[1, 0].legend(fontsize=8)
+
+    axes[1, 1].loglog(k_ccdf, p_ccdf, "o")
+    axes[1, 1].set(title="CCDF on log-log", xlabel="$k$", ylabel=r"$P(K \geq k)$")
+
+    fig.suptitle(f"Four views of the degree distribution: {name}")
+    plt.tight_layout()
+    plt.show()
+
+
+for network in networks:
+    plot_degree_visualizations(networks[network], network)
+```
+
+
+# Summary: Real Networks Are Not Random
+
+**Degree distribution**
+Random network predicts a binomial distribution (Poisson in the sparse limit). Real networks typically contain far more high-degree nodes than this prediction allows.
+
+**Average path length**
+Here random network performs well: $\langle d \rangle \sim \ln N / \ln \langle k \rangle$ gives a reasonable approximation in many systems. This is the main success of the random model and explains why small-world behavior appears so naturally.
+
+**Clustering coefficient**
+Random network predicts $C \approx \langle k \rangle / N$, which decreases with system size, and no dependence on degree. Real networks instead show much higher clustering.
+
+The Watts-Strogatz model improves the situation by reproducing high clustering together with short paths, but it still does not explain degree distributions.
+
+Why study random networks? Because ER remains a null model. For every observed feature, we first ask whether chance alone can produce it. If yes, no additional mechanism is needed. If not, the mismatch is a clue that non-random organizing principles are at work.
