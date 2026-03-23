@@ -32,9 +32,9 @@ tutorial, by which you can gain 5 points.
 | 1 | 16.2.2026 | — | — | *Skipped (Week 1)* |
 | 2 | 23.2.2026 | practical tutorial | **1P** | introduction, working with graphs |
 | 3 | 2.3.2026 | theoretical tutorial | | small-world character |
-| 4 | 9.3.2026 | practical tutorial | **2P** |  |
-| 5 | 16.3.2026 | **Test** + theoretical | **1T** |  |
-| 6 | 23.3.2026 | practical tutorial | **3P** |  |
+| 4 | 9.3.2026 | practical tutorial | **2P** | centrality measures on real networks|
+| 5 | 16.3.2026 | **Test** + theoretical | **1T** | centrality measures |
+| 6 | 23.3.2026 | practical tutorial | **3P** | random networks vs. real networks |
 | 7 | 30.3.2026 | theoretical tutorial | |  |
 | 8 | 6.4.2026 | **Cancelled** | — | **Easter Monday** |
 | 9 | 13.4.2026 | practical tutorial | **4P** |  |

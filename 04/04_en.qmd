@@ -1,0 +1,66 @@
+---
+title: 'Tutorial 4: Betweenness centrality'
+jupyter: python3
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    code-fold: true
+    embed-resources: true
+---
+
+
+
+## Recapitulation of theory
+
+**Betweenness centrality** is defined as follows. Let
+
+$\sigma_{x,y}$ be the number of shortest paths between $x$ and $y$ and
+
+$\sigma_{x,y}(v)$ be the number of shortest paths between $x$ and $y$ passing through $v$.
+In this tutorial we always sum over unordered pairs $\{x,y\}$.
+
+$$C_B(v) = \sum_{\substack{\{x,y\} \subseteq V(G) \setminus \{v\}}, x \neq y} \frac{\sigma_{x,y}(v)}{\sigma_{x,y}}$$
+
+*Global betweenness centrality* $$\bar{C}_B(G) =  \frac{1}{n} \sum_{v \in V(G)} C_B(v)$$
+
+*Average shortest path length* $$L(G) = \frac{2}{n(n-1)} \sum_{\{u,v\} \subseteq V(G)} d(u,v)$$
+
+>**Theorem**   Let $G$ be an undirected graph of size $|V(G)| = n$, $L(G)$ its average path length and $\overline{C}_B(G)$ its global betweenness centrality. Then
+$$\overline{C}_B(G) = \frac{n - 1}{2}\,(L(G) - 1).$$
+
+
+> **Lemma** Let $G$ be a graph of size $n$ and let $G'$ be a graph obtained from $G$ by adding an edge between vertices $u,v$ at distance $d = d(u,v) > 1$. Then
+$$\overline{C}_B(G') \leq \overline{C}_B(G) - \frac{d - 1}{n}.$$ 
+
+A vertex is called a *leaf* if $\deg(v) = 1$ and a *k-neighbourhood of a vertex* is defined as $$\Gamma_k(v) = \{v\in V : d(u,v) = k\}.$$
+
+
+> **Theorem**  Let $G$ be a graph of size $n$, $w \in V$ a vertex with eccentricity $\epsilon(w)$ and let $G'$ be a graph obtained from $G$ by adding a vertex $u$ which is connected to $G$ by the edge $\{u,w\}$. Then
+$$\overline{C}_B(G') = \frac{n}{n + 1}\overline{C}_B(G) + \frac{1}{n + 1}\sum_{k=1}^{\epsilon(w)} k|\Gamma_k(w)|.$$
+
+**Task 1:** Derive formulas for vertex betweenness centrality for the following graph families.
+Use unordered-pair betweenness from this tutorial. Use $n$ as the number of vertices whenever possible, and introduce additional parameters where needed.
+
+(a) Path graph $P_n$.
+
+(b) Star graph $S_n$ (one center and $n-1$ leaves).
+
+(c) Complete graph $K_n$.
+
+(d) Complete bipartite graph $K_{m,n}$.
+
+(e) Friendship graph $F_n$, defined as the graph obtained by gluing $n$ triangles in one common vertex (equivalently, $2n+1$ vertices with exactly one vertex shared by all triangles).
+
+(f) Tree $T_n$ (express the answer using additional parameters if needed).
+
+(g) Cycle graph $C_n$.
+
+**Task 2:** Derive bounds for the change in global betweenness centrality $\overline{C}_B$ after the following graph modifications.
+Use the unordered-pair convention from this tutorial and express your result as inequalities.
+
+(a) Add one chord to a cycle graph $C_n$.
+
+(b) Add one leaf to a complete graph $K_n$.
+
