@@ -1,0 +1,95 @@
+---
+title: Random Networks II - Asymptotics and Small Worlds
+jupyter: python3
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    number-sections: true
+---
+
+In this tutorial, we dive deeper into the theoretical properties of random networks as the number of nodes $n \to \infty$. Following the lecture, we will empirically verify limit behaviors, the emergence of the giant component, local tree-like structures.
+
+```{python}
+import math
+import numpy as np
+import networkx as nx
+import matplotlib.pyplot as plt
+from scipy.stats import poisson
+from scipy.optimize import fsolve
+```
+
+
+# The Giant Component
+
+> **Theorem 2 (Supercritical Erdős-Rényi graph)**
+>
+> Fix $c > 1$ and let $G_n \sim G(n, c/n)$. Let $C_1 = C_1(G_n)$ denote the largest connected component of $G_n$.
+>
+> Then there exists a unique number $\rho(c) \in (0, 1)$ satisfying
+> $$
+> \rho(c) = 1 - e^{-c\rho(c)},
+> $$
+> and
+> $$
+> \frac{|C_1|}{n} \to \rho(c)
+> $$
+> in probability as $n \to \infty$. Moreover, with high probability,
+> $$
+> |C_2| = o(n),
+> $$
+> where $C_2 = C_2(G_n)$ denotes the second largest connected component.
+
+For $p = c/n$, the structure of the network depends on $c$.
+According to **Theorem 2 (Supercritical Erdős-Rényi graph)**, if $c > 1$, there exists a unique giant component $C_1$ containing a fraction of the nodes.
+The asymptotic proportion of nodes in the giant component, $\rho(c) = |C_1|/n$, is given by the unique solution in $(0, 1)$ to the equation:
+$$
+\rho = 1 - e^{-c\rho}
+$$
+
+
+> **Task 2: The size of the Giant Component**
+>
+> * Write a script to numerically solve the equation $\rho = 1 - e^{-c\rho}$ for $\rho$ across a range of values for $c \in [0, 4]$. (Hint: use `scipy.optimize.fsolve`).
+> * Generate random graphs $G_{n, p}$ with $p = c/n$ for $n=2000$ across the same range of $c$. 
+> * Find the largest connected component $|C_1|$ and calculate the empirical ratio $|C_1|/n$.
+> * Plot your experimental ratios as points over the theoretical continuous curve $\rho(c)$. How well do they align?
+> * Identify the phase transition point.
+> * What happens to the second largest component $|C_2|$ as $c$ changes? Can you verify that $|C_2|/n \to 0$ for $c > 1$? What about for $c < 1$?
+
+```{python}
+# c_vals = np.linspace(0.0, 4.0, 40)
+# TODO: Compute theoretical and empirical ratios and plot both |C1|/n and |C2|/n.
+```
+
+# Tree-like Local Exploration
+
+In the lecture, it is noted that exploring a component using Breadth-First Search (BFS) in $G(n, c/n)$ behaves asymptotically like a **Galton-Watson branching process** with offspring distribution Poisson($c$). 
+
+Crucially, collisions (finding an edge to a previously discovered vertex, which creates a cycle) are rare if the explored sets are small. Specifically, the expected number of extra edges (cycles) when exploring up to $\log n$ nodes is:
+$$
+\mathcal{O}\left( \frac{(\log n)^2}{n} \right) = o(1)
+$$
+
+> **Task 3: Tree-like local exploration**
+>
+> * Write a custom BFS function that starts at a random node and counts the number of "cross-edges" or "back-edges" (edges leading to an already discovered vertex).
+> * Stop the BFS the exact moment you find the **first** such cycle, and return the number of nodes explored up to that point.
+> * For a graph with $n=10000$ and $c=2$, run this BFS repeatedly (e.g., 200 times). 
+> * Plot the distribution of the explored size at which the first cycle appears. Compare this to $\log n$. Do cycles appear before or after $\log n$ nodes are explored?
+> * How does the parameter $c$ affect the distribution of cycle discovery? Try with $c=0.5$ and $c=10, 1000, \cdots$ as well. Can you explain the differences?
+
+```{python}
+def bfs_until_cycle(G: nx.Graph, start_node: int) -> int:
+    # TODO: Implement BFS. Keep track of 'visited' nodes.
+    # Return the number of visited nodes the moment you encounter an edge
+    # pointing to a node already in 'visited' 
+    # If you exhaust the component without cycles, return the component size.
+    pass
+
+
+def run_experiment(n: int, c: float, num_trials: int = 200, seed: int = 42):
+    # TODO: Generate one graph G(n, c/n), sample random start nodes,
+    # run bfs_until_cycle, and return collected results.
+    pass
+```
