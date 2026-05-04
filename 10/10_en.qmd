@@ -1,0 +1,574 @@
+---
+title: Community Detection
+jupyter: python3
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    number-sections: true
+---
+
+In this tutorial we tackle the problem of *community detection*: how to find groups of nodes in a graph that are more strongly connected to each other than to the rest of the graph. We work with the famous Zachary's karate club network and implement the **Girvan-Newman** algorithm step by step.
+
+```{python}
+import math
+
+import networkx as nx
+import numpy as np
+import matplotlib.pyplot as plt
+
+import warnings
+warnings.filterwarnings("ignore")
+```
+
+
+# What is a community?
+
+Many real networks are not uniform: they consist of densely connected groups, with comparatively few connections between different groups. A **community** (also called a **cluster** or **module**) is informally a subset of nodes more tightly connected to each other than to the rest of the graph.
+
+Examples of where this matters in practice:
+
+- (social networks) circles of friends or colleagues, used by recommender systems
+- (protein interaction networks) groups of proteins involved in the same biological function
+- (the Web) pages on the same topic clustered through hyperlinks
+- (brain networks) regions involved in similar cognitive functions
+
+The general task of community detection is to *decompose* a graph into communities given only its structure, with no extra labels.
+
+
+## Partitions
+
+The simplest formalization of "decomposition" is a graph partition.
+
+> **Definition (Partition)**
+>
+> A *partition* of a graph $G = (V, E)$ is a collection $P = \{C_1, \dots, C_k\}$ of non-empty disjoint subsets of $V$ whose union is $V$. Each $C_i$ is called a *cluster*.
+
+There are two trivial partitions: the one-cluster partition $\{V\}$ and the singletons partition $\{\{v\} : v \in V\}$. A useful partition lies between these two extremes.
+
+A small toy graph with two 4-cycles joined by a single bridge edge:
+
+```{python}
+G_toy = nx.Graph()
+nx.add_cycle(G_toy, [0, 1, 2, 3])
+nx.add_cycle(G_toy, [4, 5, 6, 7])
+G_toy.add_edge(0, 7)
+
+partition_toy = [{0, 1, 2, 3}, {4, 5, 6, 7}]
+```
+
+NetworkX has a built-in check for valid partitions:
+
+```{python}
+nx.community.is_partition(G_toy, partition_toy)
+```
+
+It is convenient to represent a partition as a *partition map*: a dictionary mapping each node to its cluster index. We will reuse this for plotting and for testing whether two nodes share a cluster.
+
+```{python}
+def partition_map(partition):
+    return {v: i for i, cluster in enumerate(partition) for v in cluster}
+
+pmap = partition_map(partition_toy)
+node_colors = [pmap[v] for v in G_toy.nodes]
+
+fig, ax = plt.subplots(figsize=(5, 4))
+nx.draw(G_toy, with_labels=True, node_color=node_colors, ax=ax,
+        cmap=plt.cm.tab10, node_size=500)
+plt.show()
+```
+
+
+# Zachary's karate club
+
+To experiment with community detection algorithms we need a benchmark: a graph with a known, "natural" community structure. The most popular choice is **Zachary's karate club**.
+
+The data was collected by anthropologist Wayne Zachary in the 1970s by observing 34 members of a university karate club over three years. Edges represent friendships outside of club activities. As the study progressed a dispute broke out between the instructor (Mr. Hi, node 0) and the club president (the Officer, node 33), and the club eventually split: 18 members stayed with Mr. Hi and 16 left to form a new club around the Officer. Zachary recorded which member followed whom, giving us a ground-truth split for the network.
+
+The same split has since been recovered by a wide range of community detection algorithms applied to the friendship data alone, which is part of why this network became a standard sanity check for new methods. There is a popular T-shirt among network science researchers that reads *"if your method doesn't work on this network, then go home"*.
+
+NetworkX includes the dataset out of the box:
+
+```{python}
+K = nx.karate_club_graph()
+print(K)
+```
+
+Each node carries a `club` attribute recording the post-split membership.
+
+```{python}
+K.nodes[0], K.nodes[33]
+```
+
+Let's visualize the network with the ground-truth split:
+
+```{python}
+pos = nx.spring_layout(K, seed=42)
+club_color = {'Mr. Hi': 'lightsalmon', 'Officer': 'cornflowerblue'}
+node_colors_gt = [club_color[K.nodes[v]['club']] for v in K.nodes]
+```
+
+```{python}
+fig, ax = plt.subplots(figsize=(8, 6))
+nx.draw(K, pos=pos, node_color=node_colors_gt, with_labels=True, ax=ax,
+        edge_color='gray', node_size=400)
+ax.set_title('Karate club: ground-truth split')
+plt.show()
+```
+
+We will keep this `pos` layout consistent across all karate club plots in this notebook so that visual comparisons are easier.
+
+
+# Hierarchical clustering
+
+Many community detection algorithms are *hierarchical*: they produce not a single partition but a *sequence* of partitions ordered by granularity, ranging from one large cluster to all singletons. There are two main flavors:
+
+- *Agglomerative* algorithms start with all nodes as singletons and iteratively merge the two clusters that are most similar.
+- *Divisive* algorithms start with all nodes in a single cluster and iteratively split clusters by removing edges between dissimilar nodes.
+
+The result of either type can be summarized as a **dendrogram**: a tree whose leaves are the nodes and whose internal nodes represent merges (or splits, in the divisive case). The dendrogram makes it easy to read off a partition with any desired number of clusters by cutting the tree at the right level.
+
+We will implement one specific divisive hierarchical algorithm: **Girvan-Newman**.
+
+
+# The Girvan-Newman algorithm
+
+The intuition behind Girvan-Newman is simple. The edges that connect different communities lie on many shortest paths between nodes (you have to cross them to get from one community to another). If we keep removing these "bridge" edges one at a time, the graph eventually breaks into the underlying communities.
+
+To formalize "edge that lies on many shortest paths" we use **edge betweenness centrality**.
+
+
+## Edge betweenness centrality
+
+> **Definition (Edge betweenness centrality)**
+>
+> The edge betweenness centrality of an edge $e \in E(G)$ is
+> $$
+> C_{EB}(e) = \sum_{\substack{u, v \in V \\ u \neq v}} \frac{\sigma_{uv}(e)}{\sigma_{uv}},
+> $$
+> where $\sigma_{uv}$ is the total number of shortest paths from $u$ to $v$, and $\sigma_{uv}(e)$ is the number of those shortest paths that traverse edge $e$.
+
+This is the edge-level analogue of the (vertex) betweenness centrality from the previous tutorial. Edges that bridge different communities have high $C_{EB}$, since most shortest paths between the two communities are forced through them.
+
+NetworkX provides `nx.edge_betweenness_centrality(G)`, which returns a dictionary mapping each edge to its centrality value. Implementing this from scratch is possible but tedious, so we use the built-in `networkx` function.
+
+```{python}
+ebc = nx.edge_betweenness_centrality(K)
+sorted(ebc.items(), key=lambda kv: -kv[1])[:10]
+```
+
+The highest-betweenness edges all touch nodes 0 (Mr. Hi) or 33 (the Officer), which is consistent with the intuition that these are the "bridge" edges connecting the two factions.
+
+```{python}
+fig, ax = plt.subplots(figsize=(8, 6))
+edges, weights = zip(*ebc.items())
+nx.draw(K, pos=pos, with_labels=True, ax=ax,
+        node_color='gray', edgelist=edges, edge_color=weights,
+        edge_cmap=plt.cm.viridis, width=2, node_size=400)
+ax.set_title('Edges colored by betweenness centrality')
+plt.show()
+```
+
+
+## The algorithm
+
+The Girvan-Newman algorithm proceeds in 4 steps as introduced in the lecture:
+
+1. Compute edge betweenness centrality for every edge in $G$.
+2. Remove the edge with the highest centrality.
+3. Recompute edge betweenness centrality on the resulting graph.
+4. Repeat steps 2 and 3 until no edges remain.
+
+After each edge removal we record the partition given by the connected components of the current graph. The output is the entire *sequence* of partitions, from "1 component" to "$N$ singletons".
+
+The reason for *recomputing* betweenness after each removal (step 3) is that removing an edge can dramatically reshuffle which edges sit on shortest paths. A naive implementation that computes betweenness only once misses this and produces visibly worse results.
+
+
+## Implementing the algorithm step by step
+
+We build up the algorithm incrementally on the karate club graph.
+
+> **Task 1**: Find the edge with the highest betweenness centrality.
+>
+> Given the dictionary returned by `nx.edge_betweenness_centrality(G)`, return the edge (as a tuple) with the largest centrality value.
+
+```{python}
+def find_max_edge(G):
+    # TODO: return the edge (u, v) with maximum centrality
+    pass
+```
+
+> **Task 2**: Remove that edge and read off the partition.
+>
+> Implement `remove_and_partition(G)` which removes the highest-betweenness edge from `G` (in place) and returns the partition induced by the resulting connected components, as a list of sets.
+
+```{python}
+def remove_and_partition(G):
+    # TODO: find the highest-betweenness edge, remove it, and return
+    # the connected components of the resulting graph as a list of sets.
+    pass
+```
+
+After a single removal the graph is still connected (1 cluster). It typically takes many removals before the graph actually splits.
+
+> **Task 3**: Run the algorithm to completion.
+>
+> Apply Tasks 1+2 in a loop, removing edges one by one until none remain. Store every intermediate partition in a list `partition_sequence` and return it. Make sure not to modify the original graph (work on a copy).
+
+```{python}
+def girvan_newman(G):
+    G = G.copy()
+    partition_sequence = []
+    # TODO: while G has any edges, remove the highest-betweenness edge
+    # and append the resulting partition to partition_sequence.
+    return partition_sequence
+
+partition_sequence = None
+```
+
+The number of stored partitions equals the original number of edges. We start with one connected component and end with 34 singletons:
+
+```{python}
+print(f"Step 0:  {len(partition_sequence[0])} cluster(s)")
+print(f"Step {len(partition_sequence)-1}: {len(partition_sequence[-1])} cluster(s)")
+```
+
+
+## Visualizing the algorithm progress
+
+> **Task 4**: Plot cluster count over time.
+>
+> Using `n_clusters_seq` and `steps` defined below, plot the cluster count as a line chart. What shape do you expect the curve to have, and why?
+
+```{python}
+n_clusters_seq = [len(P) for P in partition_sequence]
+steps = np.arange(len(partition_sequence))
+# TODO: plot n_clusters_seq vs steps as a line chart.
+```
+
+The curve is non-decreasing (each removal can only split a component, never merge two) but it is not a straight line: many removals leave the cluster count unchanged, and then a single removal causes a split.
+
+Let us also look at a how the partition evolves visually:
+
+```{python}
+from matplotlib import animation
+from IPython.display import HTML
+
+def stable_colors(partition, nodes):
+    color_of = {v: min(C) for C in partition for v in C}
+    return [color_of[v] for v in nodes]
+
+fig, ax = plt.subplots(figsize=(8, 6))
+
+def update(t):
+    ax.clear()
+    colors = stable_colors(partition_sequence[t], K.nodes)
+    nx.draw(K, pos=pos, node_color=colors, with_labels=True,
+            ax=ax, node_size=350, edge_color='gray',
+            cmap=plt.cm.tab10, vmin=0, vmax=33)
+    ax.set_title(f"step {t}: {len(partition_sequence[t])} clusters", fontsize=13)
+
+anim = animation.FuncAnimation(fig, update, frames=len(partition_sequence),
+                               interval=200, blit=False)
+plt.close(fig)  # suppress the static figure
+
+HTML(anim.to_jshtml())
+```
+
+
+## Dendrogram
+
+The whole G-N output can be displayed as a dendrogram, with each leaf being a node and each internal merge corresponding to one of the splits performed by the algorithm (read in reverse).
+
+You can run this cell and explore the resulting picture; there is no task here.
+
+```{python}
+from scipy.cluster.hierarchy import dendrogram
+
+def gn_linkage_matrix(partition_sequence, n_nodes):
+    cluster_id = {frozenset([v]): v for v in range(n_nodes)}
+    next_id = n_nodes
+    Z = []
+    n_steps = len(partition_sequence)
+
+    for t in range(n_steps - 1, 0, -1):
+        cur = {frozenset(c) for c in partition_sequence[t]}
+        prev = {frozenset(c) for c in partition_sequence[t - 1]}
+        for parent in prev - cur:
+            children = [c for c in cur if c <= parent]
+            base = children[0]
+            base_id = cluster_id[base]
+            for child in children[1:]:
+                Z.append([base_id, cluster_id[child], n_steps - t,
+                          len(base) + len(child)])
+                base = frozenset(base | child)
+                base_id = next_id
+                cluster_id[base] = base_id
+                next_id += 1
+    return np.array(Z, dtype=float)
+
+Z = gn_linkage_matrix(partition_sequence, K.number_of_nodes())
+
+fig, ax = plt.subplots(figsize=(13, 5))
+dendrogram(Z, labels=list(K.nodes), color_threshold=0,
+           above_threshold_color='gray', ax=ax)
+ax.set_xlabel('Node')
+ax.set_ylabel('Algorithm step (reversed)')
+ax.set_title('Girvan-Newman dendrogram for the karate club')
+plt.tight_layout()
+plt.show()
+```
+
+Reading the dendrogram bottom-up reverses the algorithm: the leaves correspond to all-singletons (the end state), pairs of leaves merge when the algorithm split them off, and the root corresponds to the original single component. Cutting the tree at any horizontal level gives a partition; in particular, cutting just below the root gives the 2-cluster partition we'll inspect later.
+
+
+# Evaluating partitions
+
+The G-N algorithm has produced a sequence of $|E|$ partitions of the karate club. Which one of them is the "best"? To answer this, we need quantitative measures of partition quality.
+
+
+## Some basic notions
+
+The lecture introduces several quantities for assessing communities. Let $C \subseteq V$ be a cluster of size $n_C$ in a graph $G$ with $n$ nodes and $m$ edges.
+
+> **Definition (Internal and external degree)**
+>
+> For a vertex $v \in C$:
+>
+> - the *internal degree* $k_v^{\text{in}}(C)$ is the number of edges of $v$ whose other endpoint lies in $C$,
+> - the *external degree* $k_v^{\text{ext}}(C)$ is the number of edges of $v$ whose other endpoint lies outside $C$.
+>
+> The total internal and external degrees of the cluster are $k_C^{\text{in}} = \sum_{v \in C} k_v^{\text{in}}(C)$ and $k_C^{\text{ext}} = \sum_{v \in C} k_v^{\text{ext}}(C)$.
+
+> **Definition (Strong/weak community)**
+>
+> - $C$ is a *strong community* if $k_v^{\text{in}}(C) > k_v^{\text{ext}}(C)$ for every $v \in C$.
+> - $C$ is a *weak community* if $k_C^{\text{in}} > k_C^{\text{ext}}$.
+
+A strong community is necessarily weak; the converse does not hold.
+
+> **Definition (Cluster densities)**
+>
+> - *Intra-cluster density*: $\rho_{\text{int}}(C) = |E(C)| / \binom{n_C}{2}$
+> - *Inter-cluster density*: $\rho_{\text{ext}}(C) = |E(C, V \setminus C)| / (n_C (n - n_C))$
+
+A useful cluster has $\rho_{\text{int}}(C) \gg \rho_{\text{ext}}(C)$, and ideally both are far from the average density $\rho(G) = m / \binom{n}{2}$ of the whole graph.
+
+
+## Warm-up exercises
+
+Let us play with these definitions on the ground-truth partition of the karate club.
+
+```{python}
+ground_truth = [
+    {v for v in K.nodes if K.nodes[v]['club'] == 'Mr. Hi'},
+    {v for v in K.nodes if K.nodes[v]['club'] == 'Officer'},
+]
+print("Ground-truth cluster sizes:", [len(c) for c in ground_truth])
+```
+
+> **Task 5**: Internal and external degree.
+>
+> Implement two functions that compute the internal and external degree of a node $v$ with respect to a cluster $C$.
+>
+> Compute the internal and external degree of Mr. Hi (node 0) with respect to his cluster, and of the Officer (node 33) with respect to his cluster.
+
+```{python}
+def internal_degree(G, v, C):
+    # TODO: count neighbors of v that are in C
+    pass
+
+def external_degree(G, v, C):
+    # TODO: count neighbors of v that are NOT in C
+    pass
+```
+
+Both Mr. Hi and the Officer have many more friends in their own faction than across the divide, exactly as one would expect.
+
+> **Task 6**: Strong and weak community check.
+>
+> Write two predicates that test whether a cluster $C$ in $G$ is a strong/weak community.
+>
+> Apply them to both clusters in the ground-truth partition and report the results.
+
+```{python}
+def is_strong_community(G, C):
+    # TODO: True iff every vertex in C has more neighbors inside C than outside.
+    pass
+
+def is_weak_community(G, C):
+    # TODO: True iff total internal degree of C exceeds total external degree.
+    pass
+```
+
+The Mr. Hi cluster is *not* strong because some peripheral members have more friends in the other faction than in their own. Both clusters are weak, however, which already tells us this is a meaningful split.
+
+
+
+## Tracking intra and inter cluster edges
+
+A very simple way to score a partition $P = \{C_1, \dots, C_k\}$ of $G$ might use two basic quantities:
+
+- $m_{\text{intra}}(P)$ -- number of edges of $G$ whose endpoints lie in the *same* cluster of $P$,
+- $m_{\text{inter}}(P)$ -- number of edges of $G$ whose endpoints lie in *different* clusters.
+
+These always sum to $m$, so they are not independent. Still, watching them over the algorithm gives us a feel for what the algorithm is doing.
+
+Important: when we evaluate a partition we count edges of the **original** graph, not the current graph after some removals. The partition is a description of the original structure; the G-N algorithm is only a procedure for generating candidate partitions.
+
+> **Task 7**: Count intra and inter edges.
+>
+> Implement a function `count_intra_inter(G, partition)` that returns the pair $(m_{\text{intra}}, m_{\text{inter}})$.
+>
+> Apply it to the ground-truth partition and report the results.
+>
+> Apply this to every partition in the sequence and plot both sequences (and their difference) over time.
+
+```{python}
+def count_intra_inter(G, partition):
+    pmap = partition_map(partition)
+    intra = 0
+    # TODO: iterate over edges of G; an edge is intra iff its endpoints
+    # map to the same cluster index in pmap.
+    inter = G.number_of_edges() - intra
+    return intra, inter
+```
+
+```{python}
+# TODO: compute intra_seq and inter_seq by applying count_intra_inter to every
+# partition in partition_sequence, then plot both sequences and their difference.
+intra_seq, inter_seq = None, None
+```
+
+The intra-cluster count decreases monotonically from $m$ to $0$, the inter-cluster count rises monotonically from $0$ to $m$. Their difference is monotone too, so neither curve has a peak. They are not straightforward to identify a "best" partition on their own.
+
+
+## Density-based scoring
+
+We try to normalize to get a meaningful metric. Comparing the per-cluster densities defined above to the whole partition gives:
+
+$$
+\bar\rho_{\text{int}}(P) = \frac{m_{\text{intra}}(P)}{\sum_i \binom{|C_i|}{2}},
+\qquad
+\bar\rho_{\text{ext}}(P) = \frac{m_{\text{inter}}(P)}{\binom{n}{2} - \sum_i \binom{|C_i|}{2}}.
+$$
+
+A partition with $\bar\rho_{\text{int}} \gg \bar\rho_{\text{ext}}$ is one where intra-cluster pairs are far more likely to be connected than inter-cluster pairs.
+
+Following the lecture's suggestion, we use $\Delta(P) = \bar\rho_{\text{int}}(P) - \bar\rho_{\text{ext}}(P)$ as a partition score.
+
+> **Task 8**: Density score.
+>
+> Implement `density_score(G, partition)` returning $\Delta(P)$ as defined above. Treat the edge cases $\sum_i \binom{|C_i|}{2} = 0$ (all singletons) and $\binom{n}{2} - \sum_i \binom{|C_i|}{2} = 0$ (single cluster) by setting the corresponding density to $0$.
+>
+> Compute the score for the ground-truth partition and for every partition in the sequence.
+
+```{python}
+def density_score(G, partition):
+    n = G.number_of_nodes()
+    intra, inter = count_intra_inter(G, partition)
+    intra_pairs = sum(len(C) * (len(C) - 1) // 2 for C in partition)
+    inter_pairs = n * (n - 1) // 2 - intra_pairs
+    # TODO: compute rho_int and rho_ext, handling zero denominators
+    rho_int = 0.0
+    rho_ext = 0.0
+    return rho_int - rho_ext
+
+scores = None
+```
+
+Plot the score over time:
+
+```{python}
+fig, ax = plt.subplots(figsize=(8, 4.5))
+ax.plot(steps, scores, color='steelblue')
+best_t = int(np.argmax(scores))
+ax.axvline(best_t, color='red', linestyle='--', linewidth=1,
+           label=f'argmax (step {best_t})')
+ax.set_xlabel('Algorithm step')
+ax.set_ylabel(r'$\bar\rho_{\rm int} - \bar\rho_{\rm ext}$')
+ax.set_title('Density score over time')
+ax.legend()
+ax.grid(alpha=0.3)
+plt.tight_layout()
+plt.show()
+```
+
+Now we have a peak. But the partition the score selects is surprising:
+
+```{python}
+best_partition = partition_sequence[best_t]
+print(f"Best step: {best_t}")
+print(f"Best score: {scores[best_t]:.4f}")
+print(f"Number of clusters: {len(best_partition)}")
+print(f"Cluster sizes: {sorted([len(c) for c in best_partition], reverse=True)}")
+```
+
+The score peaks on a *very fine* partition, with many small dense clusters and many singletons. This is a limitation of $\bar\rho_{\text{int}} - \bar\rho_{\text{ext}}$: small clusters that happen to be cliques have $\rho_{\text{int}} = 1$, which inflates the score, while singletons contribute nothing to the intra-pair denominator and so don't drag it down. The score is biased toward fine splits.
+
+```{python}
+fig, ax = plt.subplots(figsize=(8, 6))
+pmap_best = partition_map(best_partition)
+nx.draw(K, pos=pos,
+        node_color=[pmap_best[v] for v in K.nodes],
+        cmap=plt.cm.tab10, with_labels=True, ax=ax,
+        node_size=400, edge_color='gray')
+ax.set_title(f'Partition that maximizes the density score '
+             f'({len(best_partition)} clusters)')
+plt.show()
+```
+
+This is too separated compared to the true 2-faction split.
+
+
+## Best partition with a known cluster count
+
+Hierarchical algorithms have a useful side effect: from the same partition sequence we can read off a partition with any number of clusters we want. For the karate club we know from Zachary's records that there are two communities, so we extract the first partition in the sequence with exactly two clusters.
+
+> **Task 9**: First two-cluster partition.
+>
+> Find the first partition in `partition_sequence` that has exactly two clusters and visualize it next to the ground truth.
+>
+> Compute how many nodes are misclassified compared to the ground truth.
+
+```{python}
+# TODO: assign two_cluster_partition to the first partition in
+# partition_sequence with exactly 2 clusters.
+two_cluster_partition = None
+```
+
+> **Task 10**: Count misclassified nodes.
+>
+> Compare your two-cluster partition to the ground truth. Because cluster labels are arbitrary, try both label alignments and take the one with fewer mismatches. Report how many nodes are misclassified.
+
+```{python}
+# TODO: build pmap_pred from two_cluster_partition and gt_label from the node
+# attribute, then count mismatches under both label alignments.
+pmap_pred = None
+mismatches = None
+```
+
+Side-by-side visualization:
+
+```{python}
+fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+
+nx.draw(K, pos=pos,
+        node_color=[pmap_pred[v] for v in K.nodes],
+        cmap=plt.cm.tab10, with_labels=True, ax=axes[0],
+        node_size=400, edge_color='gray')
+axes[0].set_title('Girvan-Newman two-cluster partition')
+
+nx.draw(K, pos=pos, node_color=node_colors_gt, with_labels=True, ax=axes[1],
+        node_size=400, edge_color='gray')
+axes[1].set_title('Ground truth')
+plt.tight_layout()
+plt.show()
+```
+
+Only a handful of nodes end up in the "wrong" group.
+
+
+# Looking ahead: modularity
+
+The density score we used has a clear weakness: it does not penalize partitions for being unnecessarily fine. The standard fix is **modularity**, a partition-level score that compares the number of intra-cluster edges in $P$ to the number that would be expected under a random null model with the same degree sequence. Maximizing modularity favors partitions that are denser internally than chance would predict, *and* automatically penalizes over-segmentation. We will see modularity properly in the next lecture.
